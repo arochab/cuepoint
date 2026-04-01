@@ -17,3 +17,6 @@ Thumbs.db
 
 # vite cache
 .vite/
+
+# cycle runner state (local only — not shared)
+reports/.cycle-count
