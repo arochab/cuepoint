@@ -1,6 +1,10 @@
 <script lang="ts">
   import { analyzeAudio, getRecommendations } from '../utils/audio.js';
   import type { AudioAnalysis } from '../utils/audio.js';
+  import { recipes } from '../data/recipes.js';
+  import type { Recipe } from '../types/index.js';
+
+  let { onOpenRecipe }: { onOpenRecipe?: (id: string) => void } = $props();
 
   let file = $state<File | null>(null);
   let result = $state<AudioAnalysis | null>(null);
@@ -25,19 +29,78 @@
     }
   }
 
-  const derived = $derived.by(() => {
-    if (!result) return null;
+  // IssueType drives the recipe suggestion engine — each type maps to a tag set
+  // that the scorer uses to find relevant recipes from the library.
+  type IssueType = 'headroom' | 'phase' | 'top-end' | 'low-end' | 'loudness' | 'healthy';
 
-    const issues: Array<{ title: string; severity: 'high' | 'medium' | 'low'; summary: string; beginner: string; expert: string; ignore: string }> = [];
-    const headroom = result.truePeakEstimate;
-    const loudness = result.lufsEstimate;
-    const phase = result.phaseCorrelation;
-    const low = result.spectrum.slice(0, 10).reduce((sum, value) => sum + value, 0) / 10;
-    const mid = result.spectrum.slice(18, 34).reduce((sum, value) => sum + value, 0) / 16;
-    const high = result.spectrum.slice(42, 62).reduce((sum, value) => sum + value, 0) / 20;
+  type Issue = {
+    type: IssueType;
+    title: string;
+    severity: 'high' | 'medium' | 'low';
+    summary: string;
+    beginner: string;
+    expert: string;
+    ignore: string;
+  };
+
+  type Diagnostics = {
+    issues: Issue[];
+    verdict: string;
+    verdictCopy: string;
+    safeForDemo: boolean;
+    tonal: string;
+    headroomState: string;
+    monoState: string;
+    actionQueue: Issue[];
+    recs: string[];
+    // Top 3 recipes from the library that address the detected issues, ranked by tag overlap
+    suggestions: Recipe[];
+  };
+
+  // Tag sets per issue type — matched against recipe tags to score relevance.
+  // Recipes with the most overlapping tags across all active issues rank highest.
+  const issueTagMap: Record<IssueType, string[]> = {
+    headroom:   ['mastering', 'final', 'loudness', 'LUFS'],
+    phase:      ['stereo', 'width', 'mixing'],
+    'top-end':  ['hi-hats', 'top-loop', 'air', 'drums'],
+    'low-end':  ['low-end', 'kick', 'bass', 'translation'],
+    loudness:   ['mastering', 'loudness', 'LUFS', 'final'],
+    healthy:    []
+  };
+
+  function suggestRecipes(issues: Issue[]): Recipe[] {
+    const activeTypes = issues.map(i => i.type).filter(t => t !== 'healthy');
+    if (!activeTypes.length) return [];
+
+    // Score every recipe: +1 per tag that overlaps any active issue's tag set
+    const scores = new Map<string, number>();
+    for (const type of activeTypes) {
+      const targetTags = issueTagMap[type];
+      for (const recipe of recipes) {
+        const hits = recipe.tags.filter(tag => targetTags.includes(tag)).length;
+        if (hits > 0) scores.set(recipe.id, (scores.get(recipe.id) ?? 0) + hits);
+      }
+    }
+
+    return [...scores.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([id]) => recipes.find(r => r.id === id)!)
+      .filter(Boolean);
+  }
+
+  function computeDiagnostics(r: AudioAnalysis): Diagnostics {
+    const issues: Issue[] = [];
+    const headroom = r.truePeakEstimate;
+    const loudness = r.lufsEstimate;
+    const phase = r.phaseCorrelation;
+    const low = r.spectrum.slice(0, 10).reduce((sum, v) => sum + v, 0) / 10;
+    const mid = r.spectrum.slice(18, 34).reduce((sum, v) => sum + v, 0) / 16;
+    const high = r.spectrum.slice(42, 62).reduce((sum, v) => sum + v, 0) / 20;
 
     if (headroom > -1) {
       issues.push({
+        type: 'headroom',
         title: 'Headroom is too tight',
         severity: 'high',
         summary: 'Inter-sample clipping risk is likely once this is encoded or pushed harder.',
@@ -49,17 +112,19 @@
 
     if (phase < 0.2) {
       issues.push({
+        type: 'phase',
         title: 'Mono translation is fragile',
         severity: phase < 0 ? 'high' : 'medium',
         summary: 'Width effects or layered ambience may partially cancel when folded down.',
         beginner: 'Check the low end and wide verbs in mono before doing anything else.',
-        expert: 'Collapse selected buses, inspect decorrelated reverbs and chorus returns, and narrow below 150–200 Hz.',
+        expert: 'Collapse selected buses, inspect decorrelated reverbs and chorus returns, and narrow below 150-200 Hz.',
         ignore: 'Do not add more width until the center feels stable.'
       });
     }
 
     if (high > mid + 8) {
       issues.push({
+        type: 'top-end',
         title: 'Top-end reads edgy',
         severity: 'medium',
         summary: 'The mix may feel bright on first listen but can turn brittle on long playback.',
@@ -71,17 +136,19 @@
 
     if (low > mid + 15) {
       issues.push({
+        type: 'low-end',
         title: 'Low-end dominance is likely',
         severity: 'medium',
         summary: 'Kick and bass may feel impressive alone but oversized relative to the rest.',
-        beginner: 'A/B on small speakers and lower either kick sub or bass sub by 1–2 dB.',
-        expert: 'Separate ownership between 45–65 Hz and 80–110 Hz instead of compressing everything harder.',
-        ignore: 'Do not widen the low end to make it feel “bigger”.'
+        beginner: 'A/B on small speakers and lower either kick sub or bass sub by 1-2 dB.',
+        expert: 'Separate ownership between 45-65 Hz and 80-110 Hz instead of compressing everything harder.',
+        ignore: 'Do not widen the low end to make it feel "bigger".'
       });
     }
 
     if (loudness < -14) {
       issues.push({
+        type: 'loudness',
         title: 'Delivery loudness reads conservative',
         severity: 'low',
         summary: 'The bounce may feel quieter than references even if the mix itself is healthy.',
@@ -93,6 +160,7 @@
 
     if (!issues.length) {
       issues.push({
+        type: 'healthy',
         title: 'No red flag dominates yet',
         severity: 'low',
         summary: 'The snapshot looks broadly healthy. Remaining work is likely about taste and reference matching.',
@@ -103,29 +171,28 @@
     }
 
     const mostImportant = issues[0];
-    const safeForDemo = issues.every((issue) => issue.severity !== 'high');
+    const safeForDemo = issues.every(i => i.severity !== 'high');
     const verdict = safeForDemo ? 'Safe for demo' : 'Not safe for demo yet';
     const verdictCopy = safeForDemo
-      ? 'Nothing urgent appears to block a rough share. Refine selectively, don’t overwork it.'
+      ? 'Nothing urgent appears to block a rough share. Refine selectively, do not overwork it.'
       : `${mostImportant.summary} This is the first thing to fix before sharing this bounce.`;
 
     const tonal = low > high + 10 ? 'Bottom-heavy tilt' : high > low + 10 ? 'Air-heavy tilt' : 'Balanced broad tilt';
     const headroomState = headroom > -1 ? 'Needs restraint' : headroom > -2 ? 'Usable but tight' : 'Comfortable enough';
     const monoState = phase < 0 ? 'Unsafe in mono' : phase < 0.3 ? 'Monitor in mono' : 'Stable enough';
     const actionQueue = issues.slice(0, 3);
+    const suggestions = suggestRecipes(issues);
 
-    return {
-      issues,
-      verdict,
-      verdictCopy,
-      safeForDemo,
-      tonal,
-      headroomState,
-      monoState,
-      actionQueue,
-      recs: getRecommendations(result)
-    };
-  });
+    return { issues, verdict, verdictCopy, safeForDemo, tonal, headroomState, monoState, actionQueue, recs: getRecommendations(r), suggestions };
+  }
+
+  const diagnostics = $derived(result ? computeDiagnostics(result) : null);
+
+  const categoryLabel: Record<string, string> = {
+    'sound-design': 'Sound design',
+    'mixing': 'Mixing',
+    'mastering': 'Mastering'
+  };
 </script>
 
 <section class="page-container fade-up" style="display:grid; gap:1rem;">
@@ -155,22 +222,22 @@
     <div class="surface-strong" style="border-radius:24px; padding:1rem 1.1rem; color:var(--color-warn);">{error}</div>
   {/if}
 
-  {#if result && derived}
+  {#if result && diagnostics}
     <div class="panel-stack">
       <div class="detail-grid">
         <section class="surface-strong" style="border-radius:24px; padding:1.2rem; display:grid; gap:.9rem;">
           <div class="eyebrow">Overall verdict</div>
-          <h2 style="font-size: clamp(1.9rem, 2.3vw, 2.8rem); line-height:.95; letter-spacing:-.05em; font-weight:700; color:{derived.safeForDemo ? 'var(--color-ok)' : 'var(--color-warn)'}; max-width:10ch;">{derived.verdict}</h2>
-          <p class="section-copy" style="max-width:44rem;">{derived.verdictCopy}</p>
+          <h2 style="font-size: clamp(1.9rem, 2.3vw, 2.8rem); line-height:.95; letter-spacing:-.05em; font-weight:700; color:{diagnostics.safeForDemo ? 'var(--color-ok)' : 'var(--color-warn)'}; max-width:10ch;">{diagnostics.verdict}</h2>
+          <p class="section-copy" style="max-width:44rem;">{diagnostics.verdictCopy}</p>
           <div class="tag-row">
-            <span class="pill {derived.safeForDemo ? 'active' : ''}">{derived.safeForDemo ? 'Ready to share a rough demo' : 'Hold before sharing'}</span>
-            <span class="pill">{derived.actionQueue.length} priority calls</span>
+            <span class="pill {diagnostics.safeForDemo ? 'active' : ''}">{diagnostics.safeForDemo ? 'Ready to share a rough demo' : 'Hold before sharing'}</span>
+            <span class="pill">{diagnostics.actionQueue.length} priority calls</span>
           </div>
         </section>
 
         <section class="surface-strong" style="border-radius:24px; padding:1.1rem; display:grid; gap:.7rem; align-content:start;">
           <div class="eyebrow">What matters first</div>
-          {#each derived.actionQueue as issue}
+          {#each diagnostics.actionQueue as issue}
             <article class="issue-card">
               <div class="flex items-start justify-between gap-3 mb-2">
                 <h3 style="font-size:.96rem; font-weight:650; line-height:1.2;">{issue.title}</h3>
@@ -181,6 +248,41 @@
           {/each}
         </section>
       </div>
+
+      {#if diagnostics.suggestions.length > 0 && onOpenRecipe}
+        <!-- Recipe bridge: the analyzer diagnosed problems, now surfaces the library routes that address them. -->
+        <!-- This is the product flywheel: diagnosis → recipe → project memory. -->
+        <section class="surface" style="border-radius:24px; padding:1.1rem; display:grid; gap:.85rem;">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
+            <div>
+              <div class="eyebrow">Recipes matched to your bounce</div>
+              <p class="section-copy" style="font-size:.9rem; margin-top:.3rem;">These routes from the library address the issues found in your mix.</p>
+            </div>
+          </div>
+          <div class="recipe-grid">
+            {#each diagnostics.suggestions as recipe (recipe.id)}
+              <article class="recipe-card" style="gap:.7rem;">
+                <div style="display:grid; gap:.4rem;">
+                  <div class="tag-row">
+                    <span class="pill active">{categoryLabel[recipe.category] ?? recipe.category}</span>
+                    <span class="pill">{recipe.chain.length} steps</span>
+                  </div>
+                  <div style="font-size:1rem; font-weight:650; line-height:1.1; letter-spacing:-.03em;">{recipe.title}</div>
+                  <p class="small-note" style="color:var(--color-text-secondary); font-size:.82rem;">{recipe.goal}</p>
+                </div>
+                <div style="display:flex; gap:.5rem; flex-wrap:wrap;">
+                  {#each recipe.tags.slice(0, 3) as tag}
+                    <span class="pill">{tag}</span>
+                  {/each}
+                </div>
+                <button class="btn btn-primary" style="width:100%; margin-top:auto;" onclick={() => onOpenRecipe!(recipe.id)}>
+                  Open recipe
+                </button>
+              </article>
+            {/each}
+          </div>
+        </section>
+      {/if}
 
       <div class="analyzer-grid">
         <section class="surface-strong" style="border-radius:24px; padding:1.1rem; display:grid; gap:1rem; align-content:start;">
@@ -207,16 +309,16 @@
             </div>
 
             <div class="panel-stack">
-              <div class="metric-card"><div class="mono muted" style="font-size:10px; text-transform:uppercase;">Tonal read</div><div style="font-size:.95rem; font-weight:650;">{derived.tonal}</div></div>
-              <div class="metric-card"><div class="mono muted" style="font-size:10px; text-transform:uppercase;">Headroom</div><div style="font-size:.95rem; font-weight:650;">{derived.headroomState}</div></div>
-              <div class="metric-card"><div class="mono muted" style="font-size:10px; text-transform:uppercase;">Mono</div><div style="font-size:.95rem; font-weight:650;">{derived.monoState}</div></div>
+              <div class="metric-card"><div class="mono muted" style="font-size:10px; text-transform:uppercase;">Tonal read</div><div style="font-size:.95rem; font-weight:650;">{diagnostics.tonal}</div></div>
+              <div class="metric-card"><div class="mono muted" style="font-size:10px; text-transform:uppercase;">Headroom</div><div style="font-size:.95rem; font-weight:650;">{diagnostics.headroomState}</div></div>
+              <div class="metric-card"><div class="mono muted" style="font-size:10px; text-transform:uppercase;">Mono</div><div style="font-size:.95rem; font-weight:650;">{diagnostics.monoState}</div></div>
             </div>
           </div>
         </section>
 
         <section class="surface-strong" style="border-radius:24px; padding:1.1rem; display:grid; gap:.9rem; align-content:start;">
           <div class="eyebrow">Action queue</div>
-          {#each derived.actionQueue as issue}
+          {#each diagnostics.actionQueue as issue}
             <article class="issue-card" style="display:grid; gap:.55rem;">
               <div>
                 <div style="font-size:.95rem; font-weight:650;">{issue.title}</div>
@@ -239,7 +341,7 @@
 
           <div class="issue-card" style="display:grid; gap:.45rem;">
             <div class="eyebrow">Quick notes</div>
-            {#each derived.recs.slice(0, 3) as rec}
+            {#each diagnostics.recs.slice(0, 3) as rec}
               <p class="small-note" style="color:var(--color-text-secondary);">{rec}</p>
             {/each}
           </div>

@@ -172,6 +172,7 @@ textarea { resize: vertical; }
 .nav-item .sub { font:500 9px/1 var(--font-mono); letter-spacing:.13em; text-transform:uppercase; color: var(--color-text-muted); }
 .nav-item.active { background: rgba(255,255,255,0.94); color: var(--color-text); box-shadow: 0 4px 12px rgba(25,22,18,0.04); }
 
+.hero-actions { display:flex; flex-wrap:wrap; gap:.65rem; align-items:center; }
 .hero-grid { display:grid; grid-template-columns:minmax(0,1.35fr) minmax(310px,.95fr); gap:1.2rem; }
 .metric-grid { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:1rem; }
 .recipe-layout { display:grid; grid-template-columns: 220px minmax(0,1fr); gap:1rem; }

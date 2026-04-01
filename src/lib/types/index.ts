@@ -62,6 +62,8 @@ export interface ChecklistItem {
 export interface ProjectMember {
   id: string;
   project_id: string;
+  // user_id is null until the invited person logs in and Supabase resolves their account
+  user_id: string | null;
   email: string;
   role: 'owner' | 'teacher' | 'friend' | 'reviewer';
   created_at: string;

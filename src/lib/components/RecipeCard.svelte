@@ -19,7 +19,7 @@
   <div class="flex items-start justify-between gap-3">
     <div style="display:grid; gap:.45rem; min-width:0;">
       <div class="tag-row">
-        <span class="pill {recipe.category === 'mixing' ? 'active' : ''}">{categoryLabel[recipe.category] ?? recipe.category}</span>
+        <span class="pill active">{categoryLabel[recipe.category] ?? recipe.category}</span>
         <span class="pill">{recipe.chain.length} steps</span>
       </div>
       <button onclick={onOpen} class="text-left" style="min-width:0;">

@@ -26,7 +26,7 @@ async function touchProject(projectId: string) {
 
 export async function getFavorites(userId: string): Promise<string[]> {
   const payload = await supabase.from('user_favorites').select('recipe_id').eq('user_id', userId);
-  return unwrap(payload, []).map((row: UserFavorite) => row.recipe_id);
+  return unwrap(payload, []).map((row: { recipe_id: string }) => row.recipe_id);
 }
 
 export async function toggleFavorite(userId: string, recipeId: string, current: boolean) {
@@ -45,14 +45,11 @@ export async function getNotes(userId: string): Promise<UserRecipeNote[]> {
 }
 
 export async function saveNote(userId: string, recipeId: string, content: string) {
-  const existing = unwrap(await supabase.from('user_recipe_notes').select('id').eq('user_id', userId).eq('recipe_id', recipeId).maybeSingle(), null);
-  if (existing) {
-    const { error } = await supabase.from('user_recipe_notes').update({ content, updated_at: new Date().toISOString() }).eq('id', existing.id);
-    if (error) throw error;
-  } else {
-    const { error } = await supabase.from('user_recipe_notes').insert({ user_id: userId, recipe_id: recipeId, content });
-    if (error) throw error;
-  }
+  // Upsert on the (user_id, recipe_id) unique constraint — atomic, no race condition
+  const { error } = await supabase
+    .from('user_recipe_notes')
+    .upsert({ user_id: userId, recipe_id: recipeId, content, updated_at: new Date().toISOString() }, { onConflict: 'user_id,recipe_id' });
+  if (error) throw error;
 }
 
 export async function getProjects(userId: string): Promise<Project[]> {
@@ -92,7 +89,8 @@ export async function deleteProject(id: string) {
 
 export async function getProjectRecipes(projectId: string): Promise<string[]> {
   const payload = await supabase.from('project_recipes').select('recipe_id').eq('project_id', projectId);
-  return unwrap(payload, []).map((row: ProjectRecipe) => row.recipe_id);
+  return unwrap(payload, []).map(// .select('recipe_id') returns partial rows — only type the field we asked for
+  (row: { recipe_id: string }) => row.recipe_id);
 }
 
 export async function addRecipeToProject(projectId: string, recipeId: string) {

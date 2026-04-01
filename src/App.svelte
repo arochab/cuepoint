@@ -206,12 +206,12 @@
           {projectRecipeMap}
           {user}
           onBack={() => navigate('recipes')}
-          onToggleFav={() => handleToggleFav(routeParam)}
-          onSaveNote={(content) => handleSaveNote(routeParam, content)}
-          onAddToProject={(projectId) => handleAddToProject(projectId, routeParam)}
+          onToggleFav={() => handleToggleFav(routeParam!)}
+          onSaveNote={(content) => handleSaveNote(routeParam!, content)}
+          onAddToProject={(projectId) => handleAddToProject(projectId, routeParam!)}
         />
       {:else if route === 'analyzer'}
-        <AudioAnalyzer />
+        <AudioAnalyzer onOpenRecipe={(id) => navigate('recipe-detail', id)} />
       {:else if route === 'projects'}
         <Projects {user} {projects} onNavigate={navigate} onProjectsChanged={handleProjectsChanged} />
       {:else if route === 'project-detail' && routeParam}
@@ -221,7 +221,7 @@
           {projectRecipeMap}
           onBack={() => navigate('projects')}
           onProjectsChanged={handleProjectsChanged}
-          onRecipesChanged={() => handleProjectRecipesChanged(routeParam)}
+          onRecipesChanged={() => handleProjectRecipesChanged(routeParam!)}
           onOpenRecipe={(id) => navigate('recipe-detail', id)}
           user={user}
         />

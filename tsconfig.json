@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "useDefineForClassFields": true,
+    "module": "ESNext",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    // "bundler" resolution is required for Vite — handles .svelte and .js extensions correctly
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
+    "strict": true,
+    "noEmit": true,
+    // vite/client provides import.meta.env types for VITE_* env vars
+    "types": ["vite/client"],
+    // suppress type errors inside third-party packages (e.g. @supabase/realtime-js missing phoenix types)
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*.d.ts", "src/**/*.ts", "src/**/*.svelte"],
+  "exclude": ["node_modules"]
+}

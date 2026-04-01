@@ -1,0 +1,19 @@
+# env — never commit credentials
+.env
+.env.local
+.env.*.local
+
+# build output
+dist/
+dist-ssr/
+
+# dependencies
+node_modules/
+
+# editor / OS
+.DS_Store
+Thumbs.db
+*.local
+
+# vite cache
+.vite/
