@@ -1,7 +1,12 @@
--- Kapman Toolkit V2.2 — schema extension for collaboration and safer reruns
+-- ============================================================
+-- Kapman Toolkit V2.2 — Supabase Schema (collaboration + safer reruns)
+-- Run this in the Supabase SQL Editor (Dashboard > SQL Editor)
+-- Idempotent: safe to re-run (create if not exists / policies created only if missing).
+-- ============================================================
 
 create extension if not exists pgcrypto;
 
+-- 1. Profiles (auto-created on signup via trigger)
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text not null,
@@ -30,6 +35,7 @@ create trigger on_auth_user_created
 after insert on auth.users
 for each row execute function public.handle_new_user();
 
+-- 2. Recipes catalog (read-only seed, public read)
 create table if not exists public.recipes (
   id text primary key,
   title text not null,
@@ -44,6 +50,7 @@ create table if not exists public.recipes (
 
 alter table public.recipes enable row level security;
 
+-- 3. User favorites
 create table if not exists public.user_favorites (
   user_id uuid not null references auth.users(id) on delete cascade,
   recipe_id text not null,
@@ -53,6 +60,7 @@ create table if not exists public.user_favorites (
 
 alter table public.user_favorites enable row level security;
 
+-- 4. User recipe notes
 create table if not exists public.user_recipe_notes (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -64,6 +72,7 @@ create table if not exists public.user_recipe_notes (
 
 alter table public.user_recipe_notes enable row level security;
 
+-- 5. Projects
 create table if not exists public.projects (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -75,6 +84,7 @@ create table if not exists public.projects (
 
 alter table public.projects enable row level security;
 
+-- 6. Project ↔ Recipe junction
 create table if not exists public.project_recipes (
   project_id uuid not null references public.projects(id) on delete cascade,
   recipe_id text not null,
@@ -84,6 +94,7 @@ create table if not exists public.project_recipes (
 
 alter table public.project_recipes enable row level security;
 
+-- 7. Project checklist items
 create table if not exists public.project_checklist_items (
   id uuid primary key default gen_random_uuid(),
   project_id uuid not null references public.projects(id) on delete cascade,
@@ -94,6 +105,7 @@ create table if not exists public.project_checklist_items (
 
 alter table public.project_checklist_items enable row level security;
 
+-- 8. Project members (collaboration)
 create table if not exists public.project_members (
   id uuid primary key default gen_random_uuid(),
   project_id uuid not null references public.projects(id) on delete cascade,
@@ -106,6 +118,7 @@ create table if not exists public.project_members (
 
 alter table public.project_members enable row level security;
 
+-- 9. Project comments (collaboration)
 create table if not exists public.project_comments (
   id uuid primary key default gen_random_uuid(),
   project_id uuid not null references public.projects(id) on delete cascade,
@@ -116,6 +129,7 @@ create table if not exists public.project_comments (
 
 alter table public.project_comments enable row level security;
 
+-- 10. Auto-touch projects.updated_at on update
 create or replace function public.touch_project_updated_at()
 returns trigger
 language plpgsql
@@ -131,7 +145,7 @@ create trigger projects_touch_updated_at
 before update on public.projects
 for each row execute function public.touch_project_updated_at();
 
--- Policies created only if missing
+-- 11. Row-Level Security policies (created only if missing — idempotent)
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='profiles' AND policyname='Users can read own profile') THEN
     EXECUTE 'create policy "Users can read own profile" on public.profiles for select using (auth.uid() = id)';
