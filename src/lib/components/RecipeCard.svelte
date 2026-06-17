@@ -23,11 +23,11 @@
         <span class="pill">{recipe.chain.length} steps</span>
       </div>
       <button onclick={onOpen} class="text-left" style="min-width:0;">
-        <h3 style="font-size:1.1rem; line-height:1.08; letter-spacing:-.03em; font-weight:650; color:var(--color-text);">{recipe.title}</h3>
+        <h3 style="font-size:1.1rem; line-height:1.08; letter-spacing:-.03em; font-weight:600; color:var(--color-text);">{recipe.title}</h3>
       </button>
       <p class="section-copy" style="font-size:.88rem;">{recipe.goal}</p>
     </div>
-    <button onclick={onToggleFav} class="btn btn-ghost" style="padding:.45rem .55rem; font-size:1rem; min-width:auto;">{isFav ? '★' : '☆'}</button>
+    <button onclick={onToggleFav} class="btn btn-ghost btn-icon" aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'} aria-pressed={isFav} style="font-size:1rem;">{isFav ? '★' : '☆'}</button>
   </div>
 
   <div style="display:grid; gap:.55rem;">

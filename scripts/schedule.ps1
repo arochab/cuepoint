@@ -3,12 +3,12 @@
 # Run once: powershell.exe -ExecutionPolicy Bypass -File scripts\schedule.ps1
 #
 # To cancel all cycles:
-#   Unregister-ScheduledTask -TaskName "KAPMAN-AutoCycle" -Confirm:$false
+#   Unregister-ScheduledTask -TaskName "CUEPOINT-AutoCycle" -Confirm:$false
 #
 # To run the first cycle immediately:
 #   bash scripts/cycle-runner.sh
 
-$TaskName  = "KAPMAN-AutoCycle"
+$TaskName  = "CUEPOINT-AutoCycle"
 $RepoRoot  = Split-Path -Parent $PSScriptRoot
 $BatFile   = Join-Path $RepoRoot "scripts\launch-cycle.bat"
 
@@ -49,7 +49,7 @@ Register-ScheduledTask `
   -Trigger    $trigger `
   -Settings   $settings `
   -RunLevel   Limited `
-  -Description "KAPMAN autonomous improvement loop — 8 cycles × 4h. Stops automatically." `
+  -Description "CuePoint autonomous improvement loop — 8 cycles × 4h. Stops automatically." `
   -Force | Out-Null
 
 # ── Confirm ───────────────────────────────────────────────────────────────────

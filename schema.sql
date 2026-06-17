@@ -1,5 +1,5 @@
 -- ============================================================
--- Kapman Toolkit V2.2 — Supabase Schema (collaboration + safer reruns)
+-- CuePoint V2.2 — Supabase Schema (collaboration + safer reruns)
 -- Run this in the Supabase SQL Editor (Dashboard > SQL Editor)
 -- Idempotent: safe to re-run (create if not exists / policies created only if missing).
 -- ============================================================
@@ -171,8 +171,12 @@ DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='project_checklist_items' AND policyname='Users manage own checklist items') THEN
     EXECUTE 'create policy "Users manage own checklist items" on public.project_checklist_items for all using (exists (select 1 from public.projects where projects.id = project_checklist_items.project_id and projects.user_id = auth.uid()) or exists (select 1 from public.project_members where project_members.project_id = project_checklist_items.project_id and project_members.user_id = auth.uid())) with check (exists (select 1 from public.projects where projects.id = project_checklist_items.project_id and projects.user_id = auth.uid()) or exists (select 1 from public.project_members where project_members.project_id = project_checklist_items.project_id and project_members.user_id = auth.uid()))';
   END IF;
+  -- Members may READ their own membership row; only the project OWNER may CREATE/modify
+  -- memberships. The old "or auth.uid() = user_id" in WITH CHECK let any authenticated
+  -- user self-join an arbitrary project (UUIDs leak via shares/URLs) and then read its
+  -- recipes/checklist/comments - a cross-user data leak. Owner-driven invites only.
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='project_members' AND policyname='Owners manage project members') THEN
-    EXECUTE 'create policy "Owners manage project members" on public.project_members for all using (exists (select 1 from public.projects where projects.id = project_members.project_id and projects.user_id = auth.uid()) or auth.uid() = user_id) with check (exists (select 1 from public.projects where projects.id = project_members.project_id and projects.user_id = auth.uid()) or auth.uid() = user_id)';
+    EXECUTE 'create policy "Owners manage project members" on public.project_members for all using (exists (select 1 from public.projects where projects.id = project_members.project_id and projects.user_id = auth.uid()) or auth.uid() = user_id) with check (exists (select 1 from public.projects where projects.id = project_members.project_id and projects.user_id = auth.uid()))';
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='project_comments' AND policyname='Project members read comments') THEN
     EXECUTE 'create policy "Project members read comments" on public.project_comments for select using (exists (select 1 from public.projects where projects.id = project_comments.project_id and projects.user_id = auth.uid()) or exists (select 1 from public.project_members where project_members.project_id = project_comments.project_id and project_members.user_id = auth.uid()))';
@@ -181,3 +185,341 @@ DO $$ BEGIN
     EXECUTE 'create policy "Project members add comments" on public.project_comments for insert with check (exists (select 1 from public.projects where projects.id = project_comments.project_id and projects.user_id = auth.uid()) or exists (select 1 from public.project_members where project_members.project_id = project_comments.project_id and project_members.user_id = auth.uid()))';
   END IF;
 END $$;
+
+-- ============================================================
+-- V3 — Accounts, paid coaching, entitlements (pay-per-track / credit packs)
+-- The producer stays free to taste; the AI coach is gated by an entitlement that
+-- ONLY a verified Stripe webhook (service-role) can grant. RLS = read-own, no client write.
+-- ============================================================
+
+-- Plan / Stripe customer on the profile (so the UI can gate without a join).
+alter table public.profiles add column if not exists plan text not null default 'free';
+alter table public.profiles add column if not exists stripe_customer_id text;
+alter table public.profiles add column if not exists credits integer not null default 0;
+
+-- 12. Analyses — a typed record of a mix analysis (replaces free-text comment snapshots).
+create table if not exists public.analyses (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  file_name text not null,
+  audio_hash text,                         -- sha256 of file: dedupe + anti-abuse
+  lufs numeric,
+  true_peak numeric,
+  phase numeric,
+  low_energy numeric,
+  mid_energy numeric,
+  high_energy numeric,
+  top_issue text,
+  safe_for_demo boolean,
+  created_at timestamptz not null default now()
+);
+alter table public.analyses enable row level security;
+
+-- 13. Entitlements — who paid for what. The 1-credit-per-track gate for the AI coach.
+create table if not exists public.entitlements (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  analysis_id uuid references public.analyses(id) on delete cascade,
+  status text not null default 'pending' check (status in ('pending','paid','refunded')),
+  source text not null default 'stripe',   -- 'stripe' | 'grant'
+  stripe_event_id text unique,             -- webhook idempotency / replay protection
+  coach_runs_used integer not null default 0,
+  coach_runs_limit integer not null default 20,  -- hard cap per purchase (cost fuse)
+  created_at timestamptz not null default now()
+);
+alter table public.entitlements enable row level security;
+
+-- 14. LLM usage log — every coach call (cost control + abuse detection, service-role only).
+create table if not exists public.llm_usage (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  entitlement_id uuid references public.entitlements(id) on delete set null,
+  tokens_in integer,
+  tokens_out integer,
+  cost_eur numeric,
+  created_at timestamptz not null default now()
+);
+alter table public.llm_usage enable row level security;
+
+-- Atomic credit grant (called by the Stripe webhook, service-role).
+create or replace function public.grant_credits(p_user uuid, p_credits integer)
+returns void
+language sql
+security definer
+set search_path = ''
+as $$
+  update public.profiles set credits = credits + p_credits where id = p_user;
+$$;
+
+-- Atomic credit spend on a fresh analysis: returns true if a credit was available + consumed.
+create or replace function public.spend_credit(p_user uuid)
+returns boolean
+language sql
+security definer
+set search_path = ''
+as $$
+  update public.profiles set credits = credits - 1
+   where id = p_user and credits > 0
+  returning true;
+$$;
+
+-- Atomic coach-run consumption: increments only if under the cap (closes the concurrency bypass).
+create or replace function public.consume_coach_run(p_entitlement uuid)
+returns boolean
+language sql
+security definer
+set search_path = ''
+as $$
+  update public.entitlements
+     set coach_runs_used = coach_runs_used + 1
+   where id = p_entitlement
+     and status = 'paid'
+     and coach_runs_used < coach_runs_limit
+  returning true;
+$$;
+
+-- RLS for the money tables (read-own only; ALL writes are service-role / webhook).
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='analyses' AND policyname='Users manage own analyses') THEN
+    EXECUTE 'create policy "Users manage own analyses" on public.analyses for all using (auth.uid() = user_id) with check (auth.uid() = user_id)';
+  END IF;
+  -- entitlements: users may READ their own and NOTHING else. No insert/update/delete policy
+  -- on purpose -> with RLS on, the anon/auth key cannot write. Only service-role (webhook) can.
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='entitlements' AND policyname='Users read own entitlements') THEN
+    EXECUTE 'create policy "Users read own entitlements" on public.entitlements for select using (auth.uid() = user_id)';
+  END IF;
+  -- llm_usage: read-own only; written by the coach function (service-role).
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='llm_usage' AND policyname='Users read own usage') THEN
+    EXECUTE 'create policy "Users read own usage" on public.llm_usage for select using (auth.uid() = user_id)';
+  END IF;
+  -- owner can delete their own project comments (was missing; needed once analyses moved out).
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='project_comments' AND policyname='Project owners delete comments') THEN
+    EXECUTE 'create policy "Project owners delete comments" on public.project_comments for delete using (exists (select 1 from public.projects where projects.id = project_comments.project_id and projects.user_id = auth.uid()))';
+  END IF;
+END $$;
+
+-- ============================================================
+-- V4 — Admin layer (roles, cost ledger, kill-switch, moderation, audit)
+-- Minimal but real: who is admin, who is banned, what every coach call cost,
+-- a global daily spend fuse, and an audit trail of admin actions.
+-- ============================================================
+
+-- Role + moderation flags on the profile.
+alter table public.profiles add column if not exists is_admin boolean not null default false;
+alter table public.profiles add column if not exists banned boolean not null default false;
+alter table public.profiles add column if not exists banned_reason text;
+
+-- EXISTENTIAL COLUMN LOCK: with the "Users can update own profile" policy a user could
+-- PATCH their own credits/is_admin/banned to anything. RLS controls ROWS, not COLUMNS, so
+-- we revoke column-level UPDATE on the sensitive fields and grant it ONLY on safe display
+-- fields. Money + role + ban can then be changed ONLY by service-role (webhook/admin RPC).
+revoke update on public.profiles from authenticated;
+grant update (display_name) on public.profiles to authenticated;
+
+-- 15. Usage events — the real cost ledger. One row per coach call. Token counts come from
+-- the LLM response.usage (never estimated). NEVER stores audio / prompts / coaching text:
+-- only counts + cost, protecting privacy and DB size. (llm_usage above stays for back-compat;
+-- usage_events is the admin-facing ledger with model + request id.)
+create table if not exists public.usage_events (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  model text,
+  prompt_tokens integer,
+  completion_tokens integer,
+  cost_usd numeric,
+  request_id text
+);
+alter table public.usage_events enable row level security;
+create index if not exists usage_events_created_idx on public.usage_events (created_at);
+create index if not exists usage_events_user_idx on public.usage_events (user_id);
+
+-- 16. App limits — singleton kill-switch + daily spend tracker (the bankruptcy fuse).
+create table if not exists public.app_limits (
+  id integer primary key default 1,
+  daily_spend_usd numeric not null default 0,   -- running total for today (reset by cron)
+  daily_cap_usd numeric not null default 5,      -- ceiling: coaching halts when reached
+  killed boolean not null default false,         -- hard manual off-switch
+  spend_date date not null default current_date,
+  constraint app_limits_singleton check (id = 1)
+);
+alter table public.app_limits enable row level security;
+insert into public.app_limits (id) values (1) on conflict (id) do nothing;
+
+-- 17. Admin audit log — every privileged action (grant credits, ban, etc.).
+create table if not exists public.admin_audit_log (
+  id uuid primary key default gen_random_uuid(),
+  actor_id uuid references auth.users(id) on delete set null,
+  action text not null,
+  target_user_id uuid references auth.users(id) on delete set null,
+  payload jsonb not null default '{}',
+  created_at timestamptz not null default now()
+);
+alter table public.admin_audit_log enable row level security;
+
+-- Helper: is the current JWT an admin? (security definer so it can read profiles under RLS)
+create or replace function public.is_admin()
+returns boolean
+language sql
+security definer
+set search_path = ''
+stable
+as $$
+  select coalesce((select p.is_admin from public.profiles p where p.id = auth.uid()), false);
+$$;
+
+-- Record + enforce daily spend in one atomic step. Returns true if the call is ALLOWED
+-- (under cap, not killed); rolls the day over automatically. Called by the coach function.
+create or replace function public.record_spend(p_cost_usd numeric)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_killed boolean;
+  v_today date;
+  v_cap numeric;
+  v_spent numeric;
+begin
+  select killed, spend_date, daily_cap_usd, daily_spend_usd
+    into v_killed, v_today, v_cap, v_spent
+    from public.app_limits where id = 1 for update;
+
+  if v_today <> current_date then            -- new day: reset the running total
+    update public.app_limits set spend_date = current_date, daily_spend_usd = 0 where id = 1;
+    v_spent := 0;
+  end if;
+
+  if v_killed or (v_spent + p_cost_usd) > v_cap then
+    return false;                            -- blocked: kill-switch or over the ceiling
+  end if;
+
+  update public.app_limits set daily_spend_usd = daily_spend_usd + p_cost_usd where id = 1;
+  return true;
+end;
+$$;
+
+-- Admin RPC: grant credits to a user (-1 = unlimited for press/friends), audited.
+create or replace function public.admin_grant_credits(p_target uuid, p_credits integer)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if not public.is_admin() then raise exception 'not authorized'; end if;
+  update public.profiles set credits = p_credits where id = p_target;
+  insert into public.admin_audit_log (actor_id, action, target_user_id, payload)
+  values (auth.uid(), 'grant_credits', p_target, jsonb_build_object('credits', p_credits));
+end;
+$$;
+
+-- Admin RPC: ban / unban a user, audited.
+create or replace function public.admin_set_banned(p_target uuid, p_banned boolean, p_reason text default null)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if not public.is_admin() then raise exception 'not authorized'; end if;
+  update public.profiles set banned = p_banned, banned_reason = p_reason where id = p_target;
+  insert into public.admin_audit_log (actor_id, action, target_user_id, payload)
+  values (auth.uid(), case when p_banned then 'ban' else 'unban' end, p_target, jsonb_build_object('reason', p_reason));
+end;
+$$;
+
+-- PRIVILEGED ACCOUNTS: these 3 Google accounts get admin + unlimited credits (-1) the
+-- moment they exist. Re-running is safe. Applies on signup too (see handle_new_user below).
+update public.profiles
+   set is_admin = true, credits = -1, plan = 'admin'
+ where email in ('admin1@example.com', 'admin2@example.com', 'admin@example.com');
+
+-- Extend the signup trigger so a privileged email is auto-promoted on first sign-in.
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_is_admin boolean := new.email in ('admin1@example.com', 'admin2@example.com', 'admin@example.com');
+begin
+  insert into public.profiles (id, email, display_name, is_admin, credits, plan)
+  values (new.id, new.email, null, v_is_admin, case when v_is_admin then -1 else 0 end, case when v_is_admin then 'admin' else 'free' end)
+  on conflict (id) do update set is_admin = excluded.is_admin
+    where public.profiles.email in ('admin1@example.com', 'admin2@example.com', 'admin@example.com');
+  return new;
+end;
+$$;
+
+-- spend_credit must treat -1 (unlimited) as never-decrementing, always-allowed.
+create or replace function public.spend_credit(p_user uuid)
+returns boolean
+language sql
+security definer
+set search_path = ''
+as $$
+  update public.profiles
+     set credits = case when credits = -1 then -1 else credits - 1 end
+   where id = p_user and (credits > 0 or credits = -1)
+  returning true;
+$$;
+
+-- Admin-layer RLS.
+DO $$ BEGIN
+  -- usage_events: a user reads their own; admins read all.
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='usage_events' AND policyname='Read own or admin usage events') THEN
+    EXECUTE 'create policy "Read own or admin usage events" on public.usage_events for select using (auth.uid() = user_id or public.is_admin())';
+  END IF;
+  -- app_limits: admins read it (the dashboard shows today''s spend / kill state).
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='app_limits' AND policyname='Admins read app limits') THEN
+    EXECUTE 'create policy "Admins read app limits" on public.app_limits for select using (public.is_admin())';
+  END IF;
+  -- admin_audit_log: admins read it.
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='admin_audit_log' AND policyname='Admins read audit log') THEN
+    EXECUTE 'create policy "Admins read audit log" on public.admin_audit_log for select using (public.is_admin())';
+  END IF;
+  -- profiles: admins can READ every profile (the user-management table). Writes still go
+  -- through the audited admin_* RPCs (service-definer), never a direct client update.
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='profiles' AND policyname='Admins read all profiles') THEN
+    EXECUTE 'create policy "Admins read all profiles" on public.profiles for select using (public.is_admin())';
+  END IF;
+END $$;
+
+-- ============================================================
+-- V5 — Table privilege GRANTs (needed because "Automatically expose new tables"
+-- is OFF). RLS still governs WHICH ROWS each role sees; these GRANTs just let the
+-- Data API touch the tables at all. Safe: a user only ever sees their own rows.
+-- ============================================================
+
+-- Public catalog: anyone can read recipes.
+grant select on public.recipes to anon, authenticated;
+
+-- Signed-in users operate on their own rows (RLS filters to auth.uid()).
+grant select, insert, update, delete on public.user_favorites      to authenticated;
+grant select, insert, update, delete on public.user_recipe_notes   to authenticated;
+grant select, insert, update, delete on public.projects            to authenticated;
+grant select, insert, update, delete on public.project_recipes     to authenticated;
+grant select, insert, update, delete on public.project_checklist_items to authenticated;
+grant select, insert, update, delete on public.project_members     to authenticated;
+grant select, insert, delete         on public.project_comments    to authenticated;
+grant select, insert                 on public.analyses            to authenticated;
+
+-- profiles: column-level UPDATE was already locked to display_name in V4; allow SELECT
+-- (RLS = read own, or admin reads all). No INSERT (the signup trigger creates the row).
+grant select on public.profiles to authenticated;
+
+-- Read-own money + admin ledgers (RLS gates rows; no client write).
+grant select on public.entitlements    to authenticated;
+grant select on public.llm_usage        to authenticated;
+grant select on public.usage_events      to authenticated;
+grant select on public.app_limits        to authenticated;
+grant select on public.admin_audit_log   to authenticated;
+
+-- Let signed-in users call the RPCs (each re-checks auth/admin server-side).
+grant execute on function public.spend_credit(uuid)            to authenticated;
+grant execute on function public.is_admin()                    to authenticated;
+grant execute on function public.admin_grant_credits(uuid, integer) to authenticated;
+grant execute on function public.admin_set_banned(uuid, boolean, text) to authenticated;

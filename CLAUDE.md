@@ -1,4 +1,4 @@
-﻿# KAPMAN TOOLKIT V2
+﻿# CuePoint V2
 
 ## Working rules
 - audit before editing

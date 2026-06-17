@@ -46,15 +46,15 @@
   }
 
   function fmtDate(value: string) {
-    return new Date(value).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+    return new Date(value).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
   }
 </script>
 
 <section class="page-container fade-up" style="display:grid; gap:1rem;">
-  <div class="surface" style="border-radius:28px; padding:1.2rem 1.3rem; display:grid; gap:.75rem;">
+  <div class="surface" style="border-radius:var(--radius-xl); padding:1.2rem 1.3rem; display:grid; gap:.75rem;">
     <div class="eyebrow">Project workspace</div>
     <h1 class="display-title" style="font-size: clamp(2rem, 2.6vw, 3.2rem); max-width:11ch;">Track memory that survives beyond the session.</h1>
-    <p class="hero-copy">Save recipe picks, keep notes per account, invite a teacher or a friend into the review loop, and hold onto concrete next steps.</p>
+    <p class="hero-copy">Save recipe picks, keep notes per account, hold onto concrete next steps, and keep every track's context in one place.</p>
     <div class="tag-row">
       <span class="pill active">Project comments</span>
       <span class="pill">Checklist memory</span>
@@ -64,7 +64,7 @@
 
   {#if !user}
     <div class="detail-grid">
-      <div class="surface" style="border-radius:24px; padding:1.1rem; display:grid; gap:.6rem; align-content:start;">
+      <div class="surface" style="border-radius:var(--radius-xl); padding:1.1rem; display:grid; gap:.6rem; align-content:start;">
         <div class="eyebrow">Account required</div>
         <h2 class="section-title">Projects, notes, favorites, and checklist memory are tied to your account.</h2>
         <p class="section-copy">Use the magic link once, then move between recipes, analyzer, and project space without losing context.</p>
@@ -86,7 +86,7 @@
     </div>
 
     {#if showCreate}
-      <div class="surface-strong" style="border-radius:22px; padding:1rem; display:grid; gap:.75rem;">
+      <div class="surface-strong" style="border-radius:var(--radius-lg); padding:1rem; display:grid; gap:.75rem;">
         <div class="eyebrow">Create project</div>
         <input type="text" bind:value={newName} placeholder="Project name" />
         <textarea bind:value={newDesc} rows={3} placeholder="What is this track trying to become? What should your collaborators listen for?"></textarea>
@@ -98,7 +98,7 @@
     {/if}
 
     {#if projects.length === 0}
-      <div class="surface-strong" style="border-radius:24px; padding:1.2rem; display:grid; gap:.7rem; min-height: 280px; align-content:center; justify-items:start;">
+      <div class="surface-strong" style="border-radius:var(--radius-xl); padding:1.2rem; display:grid; gap:.7rem; min-height: 280px; align-content:center; justify-items:start;">
         <div class="eyebrow">Empty workspace</div>
         <h2 class="section-title">No project yet.</h2>
         <p class="section-copy" style="max-width:42rem;">Create one project per track. Use it as the place where recipes, notes, checklist, and feedback stay coherent instead of living in five tabs and three messages.</p>
@@ -116,7 +116,7 @@
                   <p class="section-copy" style="font-size:.9rem;">{project.description}</p>
                 {/if}
               </div>
-              <button class="btn btn-ghost" style="padding:.45rem .55rem;" onclick={() => confirmDelete = confirmDelete === project.id ? null : project.id}>×</button>
+              <button class="btn btn-ghost btn-icon" aria-label="Delete project" onclick={() => confirmDelete = confirmDelete === project.id ? null : project.id}>×</button>
             </div>
             <div class="tag-row">
               <span class="pill">Updated {fmtDate(project.updated_at)}</span>
@@ -125,10 +125,10 @@
             </div>
             <div class="flex items-center justify-between gap-3 pt-2" style="border-top:1px solid var(--color-line);">
               {#if confirmDelete === project.id}
-                <div class="small-note" style="color:var(--color-warn);">Delete this project?</div>
+                <div class="small-note" style="color:var(--color-coral);">Delete this project?</div>
                 <div class="flex gap-2">
                   <button class="btn btn-secondary" style="padding:.55rem .8rem;" onclick={() => confirmDelete = null}>Cancel</button>
-                  <button class="btn btn-primary" style="padding:.55rem .8rem; background:var(--color-warn);" onclick={() => handleDelete(project.id)}>Delete</button>
+                  <button class="btn btn-magenta" style="padding:.55rem .8rem;" onclick={() => handleDelete(project.id)}>Delete</button>
                 </div>
               {:else}
                 <span class="small-note">Open full chain picks, checklist, and discussion.</span>

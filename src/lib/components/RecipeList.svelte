@@ -31,7 +31,7 @@
 </script>
 
 <section class="page-container fade-up" style="display:grid; gap:1rem;">
-  <div class="surface" style="border-radius:28px; padding:1.25rem 1.3rem; display:grid; gap:.7rem;">
+  <div class="surface" style="border-radius:var(--radius-xl); padding:1.25rem 1.3rem; display:grid; gap:.7rem;">
     <div class="eyebrow">Recipe library</div>
     <h1 class="display-title" style="font-size: clamp(2rem, 2.7vw, 3.3rem); max-width:12ch;">Production routes you can actually start from.</h1>
     <p class="hero-copy">Search by job, plugin, or texture. Start from a strong chain, then adapt it to the track instead of rebuilding every move from zero.</p>
@@ -43,7 +43,7 @@
   </div>
 
   <div class="recipe-layout">
-    <aside class="surface" style="border-radius:22px; padding: .95rem; align-self:start; position: sticky; top: 98px; display:grid; gap:.85rem;">
+    <aside class="surface" style="border-radius:var(--radius-lg); padding: .95rem; align-self:start; position: sticky; top: 98px; display:grid; gap:.85rem;">
       <div class="eyebrow">Filters</div>
       <div style="display:grid; gap:.5rem;">
         <div class="mono muted" style="font-size:10px; text-transform:uppercase; letter-spacing:.14em;">Search</div>
@@ -79,7 +79,7 @@
         <RecipeCard recipe={recipe} isFav={favorites.includes(recipe.id)} onOpen={() => onOpenRecipe(recipe.id)} onToggleFav={() => onToggleFav(recipe.id)} />
       {/each}
       {#if filtered.length === 0}
-        <div class="surface-strong" style="border-radius:24px; padding:1.25rem; grid-column:1 / -1; display:grid; gap:.55rem;">
+        <div class="surface-strong" style="border-radius:var(--radius-xl); padding:1.25rem; grid-column:1 / -1; display:grid; gap:.55rem;">
           <div class="eyebrow">No match</div>
           <h3 class="section-title">Nothing fits this filter set yet.</h3>
           <p class="section-copy">Broaden the search, remove a tag, or switch category. The library is designed to narrow quickly.</p>

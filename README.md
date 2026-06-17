@@ -1,8 +1,8 @@
-# KAPMAN Toolkit
+# CuePoint
 
 **Finish tracks faster with clearer next steps.**
 
-KAPMAN Toolkit is a product-oriented workspace for electronic music producers that combines a practical recipe library, an audio analyzer, and a project workspace into one calmer system for moving from idea to decision.
+CuePoint is a product-oriented workspace for electronic music producers that combines a practical recipe library, an audio analyzer, and a project workspace into one calmer system for moving from idea to decision.
 
 ## Why this exists
 
@@ -10,7 +10,7 @@ Most production workflows break in the same place: not at the idea stage, but at
 
 You bounce a track, hear that something is off, open ten tabs, try random fixes, lose context, and end up working longer with less confidence.
 
-KAPMAN Toolkit is built to reduce that loop.
+CuePoint is built to reduce that loop.
 
 It helps you:
 - inspect a mix and spot likely issues faster
@@ -20,7 +20,7 @@ It helps you:
 
 ## What it is
 
-KAPMAN Toolkit currently brings together four product blocks:
+CuePoint currently brings together four product blocks:
 
 ### 1. Recipe library
 A structured library of production and mix routes designed to be practical, realistic, and easy to apply.
@@ -40,14 +40,14 @@ Today, the product is organized around a simple logic:
 
 **analyze → diagnose → open the most relevant recipe → continue inside the project workspace**
 
-This is the product direction behind KAPMAN Toolkit:
+This is the product direction behind CuePoint:
 - less guesswork
 - less tab chaos
 - more continuity between insight and action
 
 ## Who it is for
 
-KAPMAN Toolkit is designed for:
+CuePoint is designed for:
 - electronic music producers
 - Ableton-oriented workflows
 - mix-focused creators who want faster decisions
@@ -55,7 +55,7 @@ KAPMAN Toolkit is designed for:
 
 ## Product positioning
 
-KAPMAN Toolkit is not trying to be a DAW replacement.
+CuePoint is not trying to be a DAW replacement.
 
 It is a **decision layer** around music production:
 a focused workspace that helps producers understand what is happening, decide what to do next, and keep that context alive across sessions.
@@ -175,7 +175,7 @@ This repo is being developed with a product-first approach:
 
 ## Status
 
-KAPMAN Toolkit is currently in an active product refinement phase:
+CuePoint is currently in an active product refinement phase:
 the foundations are in place, and the focus now is turning the current app into a sharper, more credible platform.
 
 ## Notes
@@ -186,5 +186,5 @@ the foundations are in place, and the focus now is turning the current app into 
 
 ---
 
-**KAPMAN Toolkit**  
+**CuePoint**  
 A calmer production workspace for faster, clearer music decisions.

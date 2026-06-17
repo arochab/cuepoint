@@ -6,7 +6,10 @@ import type {
   ProjectRecipe,
   ChecklistItem,
   ProjectComment,
-  ProjectMember
+  ProjectMember,
+  AdminUserRow,
+  AdminUsageRow,
+  AdminLimits
 } from '../types/index.js';
 
 function unwrap<T>(payload: { data: T | null; error: Error | null }, fallback: T): T {
@@ -45,7 +48,7 @@ export async function getNotes(userId: string): Promise<UserRecipeNote[]> {
 }
 
 export async function saveNote(userId: string, recipeId: string, content: string) {
-  // Upsert on the (user_id, recipe_id) unique constraint — atomic, no race condition
+  // Upsert on the (user_id, recipe_id) unique constraint - atomic, no race condition
   const { error } = await supabase
     .from('user_recipe_notes')
     .upsert({ user_id: userId, recipe_id: recipeId, content, updated_at: new Date().toISOString() }, { onConflict: 'user_id,recipe_id' });
@@ -89,8 +92,8 @@ export async function deleteProject(id: string) {
 
 export async function getProjectRecipes(projectId: string): Promise<string[]> {
   const payload = await supabase.from('project_recipes').select('recipe_id').eq('project_id', projectId);
-  return unwrap(payload, []).map(// .select('recipe_id') returns partial rows — only type the field we asked for
-  (row: { recipe_id: string }) => row.recipe_id);
+  // .select('recipe_id') returns partial rows - only type the field we asked for
+  return unwrap(payload, []).map((row: { recipe_id: string }) => row.recipe_id);
 }
 
 export async function addRecipeToProject(projectId: string, recipeId: string) {
@@ -190,4 +193,104 @@ export async function exportProject(project: Project, recipeIds: string[], check
   anchor.download = `${project.name.replace(/\s+/g, '-').toLowerCase()}-export.json`;
   anchor.click();
   URL.revokeObjectURL(url);
+}
+
+// ---- Accounts / paid coaching ----
+
+export interface SavedAnalysis {
+  id: string;
+  file_name: string;
+  lufs: number; true_peak: number; phase: number;
+  low_energy: number; mid_energy: number; high_energy: number;
+  top_issue: string; safe_for_demo: boolean;
+}
+
+// Save a typed analysis row (the unit the entitlement gates against). Returns its id.
+export async function saveAnalysis(a: Omit<SavedAnalysis, 'id'> & { audio_hash?: string }): Promise<string | null> {
+  try {
+    const payload = await supabase.from('analyses').insert(a).select('id').single();
+    const row = unwrap(payload, null) as { id: string } | null;
+    return row?.id ?? null;
+  } catch (error) {
+    if (relationMissing(error)) return null;
+    throw error;
+  }
+}
+
+export async function getCredits(): Promise<number> {
+  try {
+    const { data: sess } = await supabase.auth.getSession();
+    if (!sess.session) return 0;
+    const payload = await supabase.from('profiles').select('credits').eq('id', sess.session.user.id).maybeSingle();
+    const row = unwrap(payload, null) as { credits: number } | null;
+    return row?.credits ?? 0;
+  } catch (error) {
+    if (relationMissing(error)) return 0;
+    throw error;
+  }
+}
+
+// NOTE: credit spending is now SERVER-SIDE ONLY (the coach Edge Function calls spend_credit
+// with the service role, after a successful LLM call). The old client-side spendCredit() was
+// removed - letting the browser spend credits was a footgun (a user could burn their own
+// balance) and is no longer part of any flow.
+
+// Start a Stripe Checkout for a credit pack. Returns the URL to redirect to.
+export async function startCheckout(pack: 'single' | 'five' | 'twelve'): Promise<string | null> {
+  const { data, error } = await supabase.functions.invoke('create-checkout', { body: { pack } });
+  if (error) return null;
+  return (data?.url as string) ?? null;
+}
+
+// ---- Admin layer ----
+
+// Is the signed-in user an admin? Reads own profile flag (RLS-safe). False on any error.
+export async function isAdmin(userId: string): Promise<boolean> {
+  try {
+    const payload = await supabase.from('profiles').select('is_admin').eq('id', userId).maybeSingle();
+    const row = unwrap(payload, null) as { is_admin: boolean } | null;
+    return row?.is_admin === true;
+  } catch (error) {
+    if (relationMissing(error)) return false;
+    throw error;
+  }
+}
+
+// All users (admins only - RLS "Admins read all profiles" gates this server-side).
+export async function adminListUsers(): Promise<AdminUserRow[]> {
+  const payload = await supabase
+    .from('profiles')
+    .select('id, email, display_name, is_admin, banned, credits, plan, created_at')
+    .order('created_at', { ascending: false });
+  return unwrap(payload, [] as AdminUserRow[]);
+}
+
+// Today's spend + kill-switch state (admins only).
+export async function adminGetLimits(): Promise<AdminLimits | null> {
+  const payload = await supabase
+    .from('app_limits')
+    .select('daily_spend_usd, daily_cap_usd, killed, spend_date')
+    .eq('id', 1)
+    .maybeSingle();
+  return unwrap(payload, null) as AdminLimits | null;
+}
+
+// Recent coach calls = the cost ledger (admins only).
+export async function adminRecentUsage(limit = 100): Promise<AdminUsageRow[]> {
+  const payload = await supabase
+    .from('usage_events')
+    .select('id, user_id, created_at, model, prompt_tokens, completion_tokens, cost_usd')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  return unwrap(payload, [] as AdminUsageRow[]);
+}
+
+// Admin actions - all audited server-side via the SECURITY DEFINER RPCs.
+export async function adminGrantCredits(targetUserId: string, credits: number): Promise<boolean> {
+  const { error } = await supabase.rpc('admin_grant_credits', { p_target: targetUserId, p_credits: credits });
+  return !error;
+}
+export async function adminSetBanned(targetUserId: string, banned: boolean, reason?: string): Promise<boolean> {
+  const { error } = await supabase.rpc('admin_set_banned', { p_target: targetUserId, p_banned: banned, p_reason: reason ?? null });
+  return !error;
 }

@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { supabase } from './lib/supabase/client.js';
   import type { Route, Project, UserRecipeNote } from './lib/types/index.js';
-  import { getFavorites, toggleFavorite, getNotes, saveNote, getProjects, getProjectRecipes, addRecipeToProject } from './lib/utils/db.js';
+  import { getFavorites, toggleFavorite, getNotes, saveNote, getProjects, getProjectRecipes, addRecipeToProject, isAdmin } from './lib/utils/db.js';
   import { toast } from './lib/utils/toast.svelte.js';
   import Nav from './lib/components/Nav.svelte';
   import Toast from './lib/components/Toast.svelte';
@@ -12,10 +12,12 @@
   import AudioAnalyzer from './lib/components/AudioAnalyzer.svelte';
   import Projects from './lib/components/Projects.svelte';
   import ProjectDetail from './lib/components/ProjectDetail.svelte';
+  import Admin from './lib/components/Admin.svelte';
 
   let route = $state<Route>('home');
   let routeParam = $state<string | null>(null);
   let user = $state<{ id: string; email?: string } | null>(null);
+  let userIsAdmin = $state(false);
   let favorites = $state<string[]>([]);
   let notes = $state<UserRecipeNote[]>([]);
   let projects = $state<Project[]>([]);
@@ -33,6 +35,7 @@
 
   function clearUserData() {
     user = null;
+    userIsAdmin = false;
     favorites = [];
     notes = [];
     projects = [];
@@ -40,15 +43,17 @@
   }
 
   async function refreshUserData(userId: string, generation: number) {
-    const [favs, savedNotes, userProjects] = await Promise.all([
+    const [favs, savedNotes, userProjects, admin] = await Promise.all([
       getFavorites(userId),
       getNotes(userId),
-      getProjects(userId)
+      getProjects(userId),
+      isAdmin(userId)
     ]);
     if (!mounted || generation !== loadGeneration) return;
     favorites = favs;
     notes = savedNotes;
     projects = userProjects;
+    userIsAdmin = admin;
 
     const entries = await Promise.all(userProjects.map(async (project) => [project.id, await getProjectRecipes(project.id)] as const));
     if (!mounted || generation !== loadGeneration) return;
@@ -57,7 +62,8 @@
 
   async function handleToggleFav(recipeId: string) {
     if (!user) {
-      navigate('home');
+      // Explain the auth gate instead of silently teleporting home (which read as a crash).
+      toast('Sign in to save favorites - they sync to your account.', 'error', 5000);
       return;
     }
     const isFav = favorites.includes(recipeId);
@@ -195,17 +201,17 @@
 <div class="page-shell">
   {#if loading}
     <div class="page-container" style="display:grid; place-items:center; min-height:100dvh;">
-      <div class="surface-strong" style="display:inline-flex; align-items:center; gap:.75rem; padding:1rem 1.1rem; border-radius:20px;">
-        <div class="w-5 h-5 rounded-full border-2 border-[var(--color-accent)] border-r-transparent animate-spin"></div>
+      <div class="surface-strong" style="display:inline-flex; align-items:center; gap:.75rem; padding:1rem 1.1rem; border-radius:var(--radius-lg);">
+        <div class="spinner"></div>
         <span class="small-note" style="font-size:.86rem; color:var(--color-text-secondary);">Opening workspace…</span>
       </div>
     </div>
   {:else}
-    <Nav {route} {user} onNavigate={navigate} onSignOut={signOut} />
+    <Nav {route} {user} isAdmin={userIsAdmin} onNavigate={navigate} onSignOut={signOut} />
 
     <main class="flex-1" style="padding-top: 92px; padding-bottom: 24px;">
       {#if route === 'home'}
-        <Home {user} onNavigate={navigate} />
+        <Home {user} {projects} onNavigate={navigate} />
       {:else if route === 'recipes'}
         <RecipeList {favorites} onOpenRecipe={(id) => navigate('recipe-detail', id)} onToggleFav={handleToggleFav} />
       {:else if route === 'recipe-detail' && routeParam}
@@ -217,13 +223,14 @@
           {projectRecipeMap}
           {user}
           onBack={() => navigate('recipes')}
+          onNavigate={navigate}
           onToggleFav={() => handleToggleFav(routeParam!)}
           onSaveNote={(content) => handleSaveNote(routeParam!, content)}
           onAddToProject={(projectId) => handleAddToProject(projectId, routeParam!)}
         />
       {:else if route === 'analyzer'}
-        <!-- Pass user + projects so the analyzer can save snapshots to project comments -->
-        <AudioAnalyzer onOpenRecipe={(id) => navigate('recipe-detail', id)} {user} {projects} />
+        <!-- Pass user + projects so the analyzer can save snapshots; onNavigate lets the empty state route to project creation -->
+        <AudioAnalyzer onOpenRecipe={(id) => navigate('recipe-detail', id)} onNavigate={navigate} {user} {projects} />
       {:else if route === 'projects'}
         <Projects {user} {projects} onNavigate={navigate} onProjectsChanged={handleProjectsChanged} />
       {:else if route === 'project-detail' && routeParam}
@@ -237,11 +244,18 @@
           onOpenRecipe={(id) => navigate('recipe-detail', id)}
           user={user}
         />
+      {:else if route === 'admin'}
+        <!-- Client guard (defense in depth - RLS + RPCs are the real gate). -->
+        {#if userIsAdmin}
+          <Admin />
+        {:else}
+          <section class="page-container" style="padding-top:2rem;"><p class="scene-copy">Not authorized.</p></section>
+        {/if}
       {/if}
     </main>
 
     <footer class="page-container" style="padding-bottom: 20px; display:flex; justify-content:space-between; gap:1rem; color: var(--color-text-muted); font: 500 10px/1 var(--font-mono); text-transform: uppercase; letter-spacing: .14em;">
-      <span>KAPMAN Toolkit v2 · recipes · analyzer · project memory</span>
+      <span>CuePoint · recipes · analyzer · project memory</span>
       <span>Built for producers, teachers, mix engineers, and review loops.</span>
     </footer>
   {/if}

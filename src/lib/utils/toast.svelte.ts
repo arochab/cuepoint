@@ -14,7 +14,7 @@ let seq = 0;
 export function toast(message: string, type: ToastItem['type'] = 'error', ms = 4000) {
   const id = seq++;
   items.push({ id, message, type });
-  // splice instead of reassign — Svelte 5 forbids reassigning exported $state
+  // splice instead of reassign - Svelte 5 forbids reassigning exported $state
   setTimeout(() => {
     const idx = items.findIndex(t => t.id === id);
     if (idx !== -1) items.splice(idx, 1);

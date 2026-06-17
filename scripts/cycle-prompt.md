@@ -1,7 +1,7 @@
-# KAPMAN Autonomous Improvement — Cycle {CYCLE}/8
+# CuePoint Autonomous Improvement — Cycle {CYCLE}/8
 
-You are running as one cycle in an 8-cycle automated improvement loop for the KAPMAN Toolkit v2.
-Repo: C:\Users\adamc_ixt0882\Desktop\kapman-toolkit-2
+You are running as one cycle in an 8-cycle automated improvement loop for the CuePoint v2.
+Repo: C:\Users\adamc_ixt0882\Desktop\cuepoint
 
 ## Hard rules
 - Do NOT run git commands (the runner handles all git)

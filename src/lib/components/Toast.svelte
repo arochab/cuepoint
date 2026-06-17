@@ -5,7 +5,7 @@
 {#if toasts.length > 0}
   <div class="toast-rack">
     {#each toasts as t (t.id)}
-      <div class="toast toast--{t.type}" role="status">
+      <div class="toast toast--{t.type}" role={t.type === 'error' ? 'alert' : 'status'} aria-live={t.type === 'error' ? 'assertive' : 'polite'}>
         <span class="toast-msg">{t.message}</span>
         <button class="toast-close" onclick={() => dismiss(t.id)} aria-label="Dismiss">×</button>
       </div>
@@ -29,7 +29,7 @@
     align-items: center;
     gap: .6rem;
     padding: .75rem 1rem;
-    border-radius: 14px;
+    border-radius: var(--radius-sm);
     border: 1px solid var(--color-line);
     border-left: 3px solid var(--color-ok);
     background: var(--color-surface-strong);
@@ -39,7 +39,7 @@
     color: var(--color-text);
     animation: toast-in .18s ease;
   }
-  .toast--error { border-left-color: var(--color-warn); }
+  .toast--error { border-left-color: var(--color-coral); }
   .toast-msg { flex: 1; }
   .toast-close {
     background: none;
@@ -54,5 +54,8 @@
   @keyframes toast-in {
     from { transform: translateX(.75rem); opacity: 0; }
     to   { transform: translateX(0);      opacity: 1; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .toast { animation: none; }
   }
 </style>

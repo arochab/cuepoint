@@ -150,8 +150,12 @@
   }
 
   function formatTime(value: string) {
-    return new Date(value).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    return new Date(value).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
   }
+
+  // Collaboration (members/invites) is built but not wired to the live schema yet.
+  // Hidden until it actually works - shipping it half-live made the whole app feel like a prototype.
+  const COLLAB_ENABLED = false;
 </script>
 
 {#if !project}
@@ -164,7 +168,7 @@
     <button class="btn btn-ghost" style="justify-content:flex-start; padding-left:0;" onclick={onBack}>← Back to projects</button>
 
     <div class="detail-grid">
-      <div class="surface" style="border-radius:26px; padding:1.2rem 1.25rem; display:grid; gap:.8rem;">
+      <div class="surface" style="border-radius:var(--radius-xl); padding:1.2rem 1.25rem; display:grid; gap:.8rem;">
         <div class="eyebrow">Project workspace</div>
         <h1 class="display-title" style="font-size: clamp(1.95rem, 2.4vw, 3rem); max-width:11ch;">{project.name}</h1>
         {#if project.description}
@@ -177,17 +181,17 @@
         </div>
       </div>
 
-      <div class="surface-strong" style="border-radius:26px; padding:1.15rem; display:grid; gap:.75rem; align-content:start;">
+      <div class="surface-strong" style="border-radius:var(--radius-xl); padding:1.15rem; display:grid; gap:.75rem; align-content:start;">
         <div class="eyebrow">Project actions</div>
         <button class="btn btn-primary" onclick={handleExport}>Export JSON</button>
-        <button class="btn btn-secondary" disabled title="Export .adg — not implemented yet">Export .adg (later)</button>
+        <button class="btn btn-secondary" disabled title="Export .adg - not implemented yet">Export .adg (later)</button>
         <div class="small-note">Use this page as the shared memory of the track: picks, checklist, and focused comments.</div>
       </div>
     </div>
 
     <div class="detail-grid">
       <div class="panel-stack">
-        <section class="surface-strong" style="border-radius:24px; padding:1rem; display:grid; gap:.8rem;">
+        <section class="surface-strong" style="border-radius:var(--radius-xl); padding:1rem; display:grid; gap:.8rem;">
           <div class="flex items-center justify-between gap-3">
             <div>
               <div class="eyebrow">Recipe picks</div>
@@ -195,17 +199,17 @@
             </div>
           </div>
           {#if projectRecipes.length === 0}
-            <div class="card-quiet" style="padding:1rem; border-radius:18px;">Add a recipe from the recipe detail page to start building a route for this project.</div>
+            <div class="card-quiet" style="padding:1rem; border-radius:var(--radius-md);">Add a recipe from the recipe detail page to start building a route for this project.</div>
           {:else}
             <div class="panel-stack">
               {#each projectRecipes as recipe (recipe?.id)}
                 {#if recipe}
                   <div class="recipe-step" style="display:flex; align-items:center; justify-content:space-between; gap:.8rem;">
                     <button class="text-left" style="flex:1; min-width:0;" onclick={() => onOpenRecipe(recipe.id)}>
-                      <div style="font-size:.96rem; font-weight:650;">{recipe.title}</div>
+                      <div style="font-size:.96rem; font-weight:600;">{recipe.title}</div>
                       <div class="small-note">{recipe.chain.map((step) => step.plugin).slice(0, 3).join(' · ')}</div>
                     </button>
-                    <button class="btn btn-ghost" style="padding:.45rem .55rem;" onclick={() => handleRemoveRecipe(recipe.id)}>×</button>
+                    <button class="btn btn-ghost btn-icon" aria-label="Remove recipe from project" onclick={() => handleRemoveRecipe(recipe.id)}>×</button>
                   </div>
                 {/if}
               {/each}
@@ -213,7 +217,7 @@
           {/if}
         </section>
 
-        <section class="surface-strong" style="border-radius:24px; padding:1rem; display:grid; gap:.8rem;">
+        <section class="surface-strong" style="border-radius:var(--radius-xl); padding:1rem; display:grid; gap:.8rem;">
           <div class="flex items-center justify-between gap-3">
             <div>
               <div class="eyebrow">Checklist</div>
@@ -222,17 +226,17 @@
             <span class="pill active">{progress}%</span>
           </div>
           <div style="height:6px; background:rgba(25,22,18,0.06); border-radius:999px; overflow:hidden;">
-            <div style="height:100%; width:{progress}%; background:var(--color-accent);"></div>
+            <div style="height:100%; width:{progress}%; background:var(--color-cyan);"></div>
           </div>
           {#if loading}
-            <div class="card-quiet" style="padding:1rem; border-radius:18px;">Loading workspace…</div>
+            <div class="card-quiet" style="padding:1rem; border-radius:var(--radius-md);">Loading workspace…</div>
           {:else}
             <div class="panel-stack">
               {#each checklist as item (item.id)}
                 <label class="recipe-step" style="display:flex; align-items:center; gap:.75rem;">
                   <input type="checkbox" checked={item.done} onchange={() => handleToggle(item)} style="width:18px; height:18px;" />
                   <span style="flex:1; font-size:.92rem; color:{item.done ? 'var(--color-text-muted)' : 'var(--color-text)'}; text-decoration:{item.done ? 'line-through' : 'none'};">{item.label}</span>
-                  <button class="btn btn-ghost" style="padding:.35rem .45rem;" onclick={() => handleDeleteItem(item.id)}>×</button>
+                  <button class="btn btn-ghost btn-icon" aria-label="Delete checklist item" onclick={() => handleDeleteItem(item.id)}>×</button>
                 </label>
               {/each}
             </div>
@@ -245,7 +249,8 @@
       </div>
 
       <div class="panel-stack">
-        <section class="surface-strong" style="border-radius:24px; padding:1rem; display:grid; gap:.8rem;">
+        {#if COLLAB_ENABLED}
+        <section class="surface-strong" style="border-radius:var(--radius-xl); padding:1rem; display:grid; gap:.8rem;">
           <div>
             <div class="eyebrow">Members</div>
             <div class="section-copy" style="font-size:.9rem;">Lightweight collaboration for a friend, teacher, or reviewer.</div>
@@ -270,19 +275,20 @@
           </div>
           <div class="small-note">This becomes fully live once the updated schema is run in Supabase.</div>
         </section>
+        {/if}
 
-        <section class="surface-strong" style="border-radius:24px; padding:1rem; display:grid; gap:.8rem;">
+        <section class="surface-strong" style="border-radius:var(--radius-xl); padding:1rem; display:grid; gap:.8rem;">
           <div>
             <div class="eyebrow">Discussion</div>
             <div class="section-copy" style="font-size:.9rem;">Keep decisions attached to the project instead of scattering them across messages.</div>
           </div>
           <div class="panel-stack" style="max-height:380px; overflow:auto;">
             {#if comments.length === 0}
-              <div class="card-quiet" style="padding:1rem; border-radius:18px;">No comments yet. Use this to exchange focused feedback with a friend or teacher.</div>
+              <div class="card-quiet" style="padding:1rem; border-radius:var(--radius-md);">No comments yet. Use this to exchange focused feedback with a friend or teacher.</div>
             {:else}
               {#each comments as comment (comment.id)}
                 <article class="issue-card">
-                  <div class="flex items-center justify-between gap:1rem;">
+                  <div class="flex items-center justify-between" style="gap:1rem;">
                     <strong style="font-size:.86rem;">{comment.author_email}</strong>
                     <span class="small-note">{formatTime(comment.created_at)}</span>
                   </div>

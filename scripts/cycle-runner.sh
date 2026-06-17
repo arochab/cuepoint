@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# cycle-runner.sh — runs ONE improvement cycle for KAPMAN Toolkit v2
+# cycle-runner.sh — runs ONE improvement cycle for CuePoint v2
 # Called by the Task Scheduler via launch-cycle.bat every 4 hours.
 # Handles: branch creation, claude invocation, git commit, notification.
 # Does NOT: auto-merge to main, auto-deploy, commit secrets.
@@ -23,7 +23,7 @@ CYCLE=$((CYCLE + 1))
 # Stop cleanly after 8 cycles — Task Scheduler will keep firing but we exit early
 if (( CYCLE > 8 )); then
   echo "All 8 cycles complete. Delete the scheduled task to stop future runs."
-  echo "  powershell.exe Unregister-ScheduledTask -TaskName KAPMAN-AutoCycle -Confirm:\$false"
+  echo "  powershell.exe Unregister-ScheduledTask -TaskName CUEPOINT-AutoCycle -Confirm:\$false"
   exit 0
 fi
 
@@ -34,7 +34,7 @@ BRANCH="cycle/$CYCLE-$TIMESTAMP"
 
 echo ""
 echo "═══════════════════════════════════════════════════"
-echo "  KAPMAN Autonomous Cycle $CYCLE / 8 — $TIMESTAMP"
+echo "  CuePoint Autonomous Cycle $CYCLE / 8 — $TIMESTAMP"
 echo "═══════════════════════════════════════════════════"
 
 # ── Git: create cycle branch off main ─────────────────────────────────────────

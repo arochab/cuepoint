@@ -1,7 +1,14 @@
-# env — never commit credentials
+# env - never commit credentials
 .env
 .env.*
 !.env.example
+
+# secrets - never commit any downloaded key / secret file
+*secret*
+*client_secret*
+client_secrets*
+*.pem
+*.key
 
 # build output
 dist/
@@ -15,8 +22,15 @@ node_modules/
 Thumbs.db
 *.local
 
+# local dev tooling (not shared)
+.claude/
+
 # vite cache
 .vite/
 
-# cycle runner state (local only — not shared)
+# stray edit artifacts
+*.head
+*.orig
+
+# cycle runner state (local only - not shared)
 reports/.cycle-count
