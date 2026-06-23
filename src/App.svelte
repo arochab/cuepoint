@@ -7,7 +7,8 @@
   import Nav from './lib/components/Nav.svelte';
   import Toast from './lib/components/Toast.svelte';
   import Home from './lib/components/Home.svelte';
-  import RecipeList from './lib/components/RecipeList.svelte';
+  // RecipeList/RecipeCard deleted by the UX jury — the standalone library is gone.
+  // RecipeDetail survives, reached from a verdict (Path A) or a cold need-question (Path B).
   import RecipeDetail from './lib/components/RecipeDetail.svelte';
   import AudioAnalyzer from './lib/components/AudioAnalyzer.svelte';
   import Projects from './lib/components/Projects.svelte';
@@ -16,6 +17,17 @@
 
   let route = $state<Route>('home');
   let routeParam = $state<string | null>(null);
+  // Recipe-detail is now reached from several places (verdict, cold question, projects);
+  // remember where we came from so "← Back" returns there instead of a deleted library.
+  let previousRoute = $state<Route>('analyzer');
+  // Home and the analyzer are conceptually one screen: a drop on Home hands the file here,
+  // we route to the analyzer, and it picks the file up on mount.
+  let pendingFile = $state<File | null>(null);
+
+  function startAnalysis(f: File) {
+    pendingFile = f;
+    navigate('analyzer');
+  }
   let user = $state<{ id: string; email?: string } | null>(null);
   let userIsAdmin = $state(false);
   let favorites = $state<string[]>([]);
@@ -28,6 +40,8 @@
   let loadGeneration = 0;
 
   function navigate(next: Route, param?: string) {
+    // Track the origin of a recipe-detail open so Back can return to it.
+    if (next === 'recipe-detail' && route !== 'recipe-detail') previousRoute = route;
     route = next;
     routeParam = param ?? null;
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -200,20 +214,15 @@
 <Toast />
 <div class="page-shell">
   {#if loading}
-    <div class="page-container" style="display:grid; place-items:center; min-height:100dvh;">
-      <div class="surface-strong" style="display:inline-flex; align-items:center; gap:.75rem; padding:1rem 1.1rem; border-radius:var(--radius-lg);">
-        <div class="spinner"></div>
-        <span class="small-note" style="font-size:.86rem; color:var(--color-text-secondary);">Opening workspace…</span>
-      </div>
+    <div style="display:grid; place-items:center; min-height:100dvh;">
+      <div class="spinner"></div>
     </div>
   {:else}
     <Nav {route} {user} isAdmin={userIsAdmin} onNavigate={navigate} onSignOut={signOut} />
 
-    <main class="flex-1" style="padding-top: 92px; padding-bottom: 24px;">
+    <main class="flex-1" style="padding-top: 64px;">
       {#if route === 'home'}
-        <Home {user} {projects} onNavigate={navigate} />
-      {:else if route === 'recipes'}
-        <RecipeList {favorites} onOpenRecipe={(id) => navigate('recipe-detail', id)} onToggleFav={handleToggleFav} />
+        <Home {user} {projects} onNavigate={navigate} onFile={startAnalysis} />
       {:else if route === 'recipe-detail' && routeParam}
         <RecipeDetail
           recipeId={routeParam}
@@ -222,15 +231,15 @@
           {projects}
           {projectRecipeMap}
           {user}
-          onBack={() => navigate('recipes')}
+          onBack={() => navigate(previousRoute)}
           onNavigate={navigate}
           onToggleFav={() => handleToggleFav(routeParam!)}
           onSaveNote={(content) => handleSaveNote(routeParam!, content)}
           onAddToProject={(projectId) => handleAddToProject(projectId, routeParam!)}
         />
       {:else if route === 'analyzer'}
-        <!-- Pass user + projects so the analyzer can save snapshots; onNavigate lets the empty state route to project creation -->
-        <AudioAnalyzer onOpenRecipe={(id) => navigate('recipe-detail', id)} onNavigate={navigate} {user} {projects} />
+        <!-- pendingFile: a file dropped on Home is analyzed immediately on mount. -->
+        <AudioAnalyzer onOpenRecipe={(id) => navigate('recipe-detail', id)} onNavigate={navigate} {user} {projects} {pendingFile} onConsumedFile={() => pendingFile = null} />
       {:else if route === 'projects'}
         <Projects {user} {projects} onNavigate={navigate} onProjectsChanged={handleProjectsChanged} />
       {:else if route === 'project-detail' && routeParam}
@@ -254,9 +263,8 @@
       {/if}
     </main>
 
-    <footer class="page-container" style="padding-bottom: 20px; display:flex; justify-content:space-between; gap:1rem; color: var(--color-text-muted); font: 500 10px/1 var(--font-mono); text-transform: uppercase; letter-spacing: .14em;">
-      <span>CuePoint · recipes · analyzer · project memory</span>
-      <span>Built for producers, teachers, mix engineers, and review loops.</span>
+    <footer class="page-container" style="padding: 28px 0 20px; position:relative; z-index:2; color: var(--color-text-muted); font: 400 11px/1 var(--font-mono); letter-spacing: .12em;">
+      <span>cuepoint</span>
     </footer>
   {/if}
 </div>

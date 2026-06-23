@@ -1,5 +1,6 @@
 <script lang="ts">
   import { supabase } from '../supabase/client.js';
+  import { t } from '../i18n/index.svelte.js';
 
   let email = $state('');
   let status = $state<'idle' | 'sending' | 'sent' | 'error'>('idle');
@@ -31,26 +32,26 @@
 
 <div class="surface-strong" style="border-radius:var(--radius-xl); padding:1.2rem; display:grid; gap:.85rem; min-height: 248px; align-content:start;">
   <div>
-    <div class="eyebrow">Get access</div>
-    <h3 class="section-title" style="margin-top:.65rem; max-width:14ch;">Save your tracks and let Cue remember your progress.</h3>
-    <p class="section-copy" style="margin-top:.45rem; font-size:.92rem;">One tap with Google. No password, no spam.</p>
+    <div class="eyebrow">{t('nav.getAccess')}</div>
+    <h3 class="section-title" style="margin-top:.65rem; max-width:14ch;">{t('auth.title')}</h3>
+    <p class="section-copy" style="margin-top:.45rem; font-size:.92rem;">{t('auth.googleSub')}</p>
   </div>
 
   {#if status === 'sent'}
     <div class="card-quiet" style="padding:1rem; border-radius:var(--radius-md); display:grid; gap:.35rem;">
-      <div class="eyebrow">Check inbox</div>
-      <p class="section-copy">We sent a link to <strong style="color:var(--color-text)">{email}</strong>.</p>
+      <p class="section-copy">{t('auth.emailSent')}</p>
+      <p class="small-note"><strong style="color:var(--color-text)">{email}</strong></p>
     </div>
   {:else}
     <div style="display:grid; gap:.7rem; align-content:start;">
-      <button class="btn btn-primary" style="width:100%;" onclick={handleGoogle}>Continue with Google</button>
+      <button class="btn btn-primary" style="width:100%;" onclick={handleGoogle}>{t('auth.google')}</button>
       {#if showEmail}
-        <input type="email" placeholder="you@email.com" bind:value={email} onkeydown={(event: KeyboardEvent) => event.key === 'Enter' && handleSubmit()} />
+        <input type="email" placeholder={t('auth.emailPlaceholder')} bind:value={email} onkeydown={(event: KeyboardEvent) => event.key === 'Enter' && handleSubmit()} />
         <button class="btn btn-secondary" style="width:100%;" onclick={handleSubmit} disabled={!email.trim() || status === 'sending'}>
-          {status === 'sending' ? 'Sending magic link…' : 'Send magic link'}
+          {status === 'sending' ? t('an.saving') : t('auth.emailCta')}
         </button>
       {:else}
-        <button class="btn btn-ghost" style="width:100%; font-size:.84rem;" onclick={() => showEmail = true}>or use email instead</button>
+        <button class="btn btn-ghost" style="width:100%; font-size:.84rem;" onclick={() => showEmail = true}>{t('auth.orEmail')}</button>
       {/if}
       {#if status === 'error'}
         <p class="small-note" style="color:var(--color-coral)">{errorMsg}</p>

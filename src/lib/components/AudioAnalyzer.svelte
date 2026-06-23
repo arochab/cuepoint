@@ -1,30 +1,46 @@
 <script lang="ts">
-  import { analyzeAudio, getRecommendations } from '../utils/audio.js';
+  import { analyzeAudio, getRecommendations, ANALYSIS_STAGES, type AnalysisStage } from '../utils/audio.js';
   import type { AudioAnalysis } from '../utils/audio.js';
-  import { recipes } from '../data/recipes.js';
-  import type { Recipe, Project } from '../types/index.js';
+  import type { Recipe, Project, RecipeNeed } from '../types/index.js';
+  import { issueSummary, honestyReceipt } from '../reco/issueText.js';
   import { addProjectComment, saveAnalysis, getCredits, startCheckout } from '../utils/db.js';
   import Cue from './Cue.svelte';
   import ShareCard from './ShareCard.svelte';
   import { rulesProvider } from '../coach/rulesProvider.js';
   import { serverProvider, setCoachAnalysisId } from '../coach/serverProvider.js';
   import type { IssueType } from '../reco/issueTypes.js';
-  import { recommendationFor } from '../reco/recommendations.js';
   import { recordAnalysis, compareToLast, type AnalysisRecord, type MemoryReadout } from '../progress/history.js';
   import { GENRES, lastGenre, rememberGenre, type GenreId } from '../reco/genres.js';
   import { scoreMix, type MixScore } from '../reco/score.js';
+  // Deterministic need→route bridge (replaces brittle tag-overlap scoring). Cue can
+  // only ever hand over a route the DSP supports — see needRoutes.ts.
+  import { suggestionsForIssues, characterRoutes, bestRouteForNeed, DIAGNOSTIC_NEEDS } from '../reco/needRoutes.js';
+  import { i18n, t } from '../i18n/index.svelte.js';
 
   let {
     onOpenRecipe,
     onNavigate,
     user = null,
-    projects = []
+    projects = [],
+    pendingFile = null,
+    onConsumedFile
   }: {
     onOpenRecipe?: (id: string) => void;
     onNavigate?: (route: 'projects') => void;
     user?: { id: string; email?: string } | null;
     projects?: Project[];
+    pendingFile?: File | null;
+    onConsumedFile?: () => void;
   } = $props();
+
+  // A file handed over from Home (the drop happened there) is analyzed immediately.
+  $effect(() => {
+    if (pendingFile) {
+      const f = pendingFile;
+      onConsumedFile?.();
+      void runAnalysis(f);
+    }
+  });
 
   // Genre is asked ONCE, up front (chip row). Pre-selected from last time as a kindness.
   let genre = $state<GenreId | null>(lastGenre());
@@ -34,19 +50,45 @@
   let loading = $state(false);
   let error = $state('');
 
-  // Live analysis stepper - determinate, named stages that narrate the craft.
-  const STEPS = ['Decoding audio', 'Measuring loudness', 'Scanning for masking', 'Picking your #1 fix'];
-  let stepIndex = $state(-1);     // -1 = not started, STEPS.length = done
-  let liveEnergy = $state(0);     // feeds Cue's audio-reactive pulse during analysis
+  // HONEST listening stepper — the 4 named stages map 1:1 to real DSP phases reported by
+  // analyzeAudio's onStage callback. The progress hairline width = stagesDone / total, so
+  // it reflects true completion, never a faked ceiling.
+  const STAGE_KEY: Record<AnalysisStage, string> = {
+    decode: 'an.stageDecode', loudness: 'an.stageLoudness', truepeak: 'an.stageTruepeak', spectrum: 'an.stageSpectrum'
+  };
+  let stageDone = $state(0);      // 0..ANALYSIS_STAGES.length
+  let currentStage = $state<AnalysisStage | null>(null);
+
+  // Premium motion has two escape hatches: reduced-motion (OS setting) + express (the
+  // iterative bounce loop — same track re-analyzed collapses the ceremony to near-instant).
+  const reduceMotion = typeof window !== 'undefined'
+    && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  let express = $state(false);
 
   // The interpreted result (genre-aware). Single source for verdict, score, face, bands.
   let mix = $state<MixScore | null>(null);
   let memory = $state<MemoryReadout | null>(null);
 
-  // Progressive disclosure: everything beyond the one fix folds away.
-  let showBreakdown = $state(false);
-  let showNumbers = $state(false);
+  // Progressive disclosure: the default verdict is ONE thing. Everything numeric folds
+  // into a single quiet "More" reveal (the jury killed the score hero + stat tiles + the
+  // evidence grid from the default path). showFix drives Path A — The Continuation.
+  let showMore = $state(false);     // single fold: score whisper + stats + evidence
   let showShare = $state(false);
+  let showFix = $state(false);      // Path A: the fix is the next sentence after the verdict
+  let showMoreRoutes = $state(false); // reveal suggestions[1..2]
+  let expandedRoute = $state<string | null>(null); // inline-expand a route's steps
+  let showCharacter = $state(false); // browse-only character lane (taste, never a verdict)
+  let showCold = $state(false);      // Path B: the cold-entry need-question
+
+  // The 4 diagnostic need-chips shown cold (low-end, phase, top-end, loudness). The 5th
+  // chip ("ready?") is rendered separately and routes to upload — it is a verdict, not a route.
+  const COLD_NEEDS: RecipeNeed[] = DIAGNOSTIC_NEEDS;
+
+  // Cold-door chip → the single best route for that need (deterministic, no scoring).
+  function pickNeed(need: RecipeNeed) {
+    const route = bestRouteForNeed(need);
+    if (route && onOpenRecipe) { showCold = false; onOpenRecipe(route.id); }
+  }
 
   // Save-to-project state
   let selectedProjectId = $state('');
@@ -55,12 +97,15 @@
   let snapshotError = $state('');
 
   // Coach state. The AI coach is OPTIONAL and on-demand; the DSP diagnosis is the truth.
+  // PARKED (jury decision): the coach + paid packs no longer surface AT the verdict moment
+  // — money must not appear mid-sentence. The wiring stays so paid AI coaching can return
+  // as a deliberate, later opt-in (v2), but it has no UI entry point on the verdict today.
   let coachText = $state('');
   let coachBusy = $state(false);
   let coachStage = $state('');
   let coachUsedAI = $state(false);
 
-  // Paid-coach state.
+  // Paid-coach state (parked alongside the coach — see note above).
   let savedAnalysisId = $state<string | null>(null);
   let credits = $state(0);
   let showPacks = $state(false);
@@ -133,43 +178,43 @@
 
   let fileGeneration = 0;
 
+  // Public entry: Home hands us a dropped/selected file directly.
+  export function analyzeFile(f: File) { void runAnalysis(f); }
+
   async function handleFile(event: Event) {
     const target = event.target as HTMLInputElement;
     const next = target.files?.[0];
     if (!next) return;
+    await runAnalysis(next);
+  }
+
+  async function runAnalysis(next: File) {
     const myRun = ++fileGeneration;
+    // express = the iterative bounce loop (same filename re-analyzed) -> skip ceremony.
+    express = !!file && file.name === next.name;
     file = next;
     loading = true;
     result = null; mix = null; memory = null; error = '';
-    showBreakdown = false; showNumbers = false; showShare = false;
+    showMore = false; showShare = false; showFix = false; showMoreRoutes = false;
+    expandedRoute = null; showCharacter = false; showCold = false;
     selectedProjectId = ''; snapshotSaved = false; snapshotError = '';
     coachText = ''; coachBusy = false; coachStage = '';
     savedAnalysisId = null; setCoachAnalysisId(null);
 
-    // Claude Design "LISTENING" flow: a SCANNING percentage climbs while the real DSP runs.
-    // We never show a fake 100% before the real result is in: the bar waits for the analysis.
-    stepIndex = 0;
-    analyzePct = 0;
-    let energyTimer: ReturnType<typeof setInterval> | undefined;
-    energyTimer = setInterval(() => { liveEnergy = Math.random() * 0.8 + 0.2; }, 140);
-    let scanReady = false;
-    const scanTimer = setInterval(() => {
-      if (myRun !== fileGeneration) return;
-      // climb to 92% on a timer; the last 8% is unlocked only once the DSP result is ready.
-      const ceiling = scanReady ? 100 : 92;
-      analyzePct = Math.min(ceiling, analyzePct + Math.random() * 7 + 3);
-      stepIndex = analyzePct < 33 ? 0 : analyzePct < 66 ? 1 : analyzePct < 95 ? 2 : 3;
-    }, 180);
+    // HONEST listening flow: each named stage ticks as its real DSP phase begins (onStage).
+    // The progress hairline width = stageDone / total. No fake ceiling, no padding delay.
+    stageDone = 0; currentStage = null;
 
     try {
-      const analysis = await analyzeAudio(next);
-      if (myRun !== fileGeneration) { clearInterval(scanTimer); return; }
-      scanReady = true;
-      // let the bar visibly reach 100 before the reveal (Claude Design pacing).
-      await new Promise<void>(r => setTimeout(r, 520));
-      clearInterval(scanTimer);
+      const analysis = await analyzeAudio(next, (stage) => {
+        if (myRun !== fileGeneration) return;
+        currentStage = stage;
+        // the stage index tells us how many are now in-flight/complete
+        stageDone = ANALYSIS_STAGES.indexOf(stage);
+      });
       if (myRun !== fileGeneration) return;
-      analyzePct = 100;
+      // The DSP is genuinely done — all stages complete.
+      stageDone = ANALYSIS_STAGES.length;
 
       result = analysis;
       const diag = computeDiagnostics(analysis);
@@ -204,19 +249,17 @@
       }
     } catch (err) {
       console.error(err);
-      if (myRun === fileGeneration) error = 'Could not analyze this file. Try a standard WAV, MP3, or FLAC export.';
+      if (myRun === fileGeneration) error = t('an.error');
     } finally {
-      clearInterval(scanTimer);
-      if (energyTimer) clearInterval(energyTimer);
-      liveEnergy = 0;
-      if (myRun === fileGeneration) { loading = false; stepIndex = -1; }
+      if (myRun === fileGeneration) { loading = false; currentStage = null; }
     }
   }
 
-  // Reset to the upload screen (Claude Design "ANALYZE ANOTHER").
+  // Reset to the upload screen.
   function analyzeAnother() {
-    file = null; result = null; mix = null; memory = null; error = '';
-    coachText = ''; showPacks = false; showBreakdown = false; showNumbers = false; showShare = false;
+    file = null; result = null; mix = null; memory = null; error = ''; express = false;
+    coachText = ''; showPacks = false; showMore = false; showShare = false;
+    showFix = false; showMoreRoutes = false; expandedRoute = null; showCharacter = false; showCold = false;
   }
 
   async function saveSnapshot() {
@@ -251,28 +294,10 @@
     actionQueue: Issue[]; recs: string[]; suggestions: Recipe[];
   };
 
-  const issueTagMap: Record<IssueType, string[]> = {
-    headroom:   ['mastering', 'final', 'loudness', 'LUFS'],
-    phase:      ['stereo', 'width', 'mixing'],
-    'top-end':  ['hi-hats', 'top-loop', 'air', 'drums'],
-    'low-end':  ['low-end', 'kick', 'bass', 'translation'],
-    loudness:   ['mastering', 'loudness', 'LUFS', 'final'],
-    healthy:    []
-  };
-
+  // Recipe suggestions now route off the explicit `recipe.need` field via needRoutes,
+  // not tag overlap — the matching is structural, so Cue cannot bluff a route.
   function suggestRecipes(issues: Issue[]): Recipe[] {
-    const activeTypes = issues.map(i => i.type).filter(t => t !== 'healthy');
-    if (!activeTypes.length) return [];
-    const scores = new Map<string, number>();
-    for (const type of activeTypes) {
-      const targetTags = issueTagMap[type];
-      for (const recipe of recipes) {
-        const hits = recipe.tags.filter(tag => targetTags.includes(tag)).length;
-        if (hits > 0) scores.set(recipe.id, (scores.get(recipe.id) ?? 0) + hits);
-      }
-    }
-    return [...scores.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3)
-      .map(([id]) => recipes.find(r => r.id === id)!).filter(Boolean);
+    return suggestionsForIssues(issues.map(i => i.type));
   }
 
   function computeDiagnostics(r: AudioAnalysis): Diagnostics {
@@ -336,24 +361,38 @@
   const diagnostics = $derived(result ? computeDiagnostics(result) : null);
   const topFix = $derived(diagnostics?.actionQueue[0] ?? null);
 
-  // Map the real DSP verdict to Claude Design's three-answer system + exact brand colours.
-  // ship -> SEND IT (Volt Lime) | almost -> ONE THING (Pool Cyan) | work -> NOT YET (Magenta).
-  const VERDICT_WORD: Record<string, string> = { ship: 'SEND IT', almost: 'ONE THING', work: 'NOT YET' };
+  // Map the real DSP verdict to the three-answer system + exact brand colours.
+  // ship -> SEND IT / ENVOIE (Volt Lime) | almost -> ALMOST / PRESQUE (Pool Cyan) | work -> NOT YET / PAS ENCORE (Magenta).
+  // The middle word is now ALMOST/PRESQUE (not "ONE THING") so it stops colliding with
+  // the design principle and the fix-card heading (juror catch).
+  const VERDICT_KEY: Record<string, string> = { ship: 'verdict.ship', almost: 'verdict.almost', work: 'verdict.work' };
   const VERDICT_HEX: Record<string, string> = { ship: '#C9F23C', almost: '#2FCDE6', work: '#F73CB0' };
-  const verdictWord = $derived(mix ? VERDICT_WORD[mix.verdict] : 'ONE THING');
+  // referencing i18n.locale keeps verdictWord reactive to the language toggle
+  const verdictWord = $derived(mix ? (i18n.locale, t(VERDICT_KEY[mix.verdict])) : t('verdict.almost'));
   const verdictColor = $derived(mix ? VERDICT_HEX[mix.verdict] : '#2FCDE6');
   // Cue's mood drives the 3D verdict state: ship->happy(send), almost->thinking(one), work->worried(not).
   const cueMood = $derived(mix ? (mix.verdict === 'ship' ? 'happy' : mix.verdict === 'almost' ? 'thinking' : 'worried') : 'idle');
 
-  // The one fix sentence, grounded in the real diagnosis (truthful, not the demo's canned copy).
+  // The "move" title, localized: the producer-voice fix headline (FR/EN via i18n).
+  const moveTitle = $derived(topFix ? (i18n.locale, t(`move.${topFix.type}`)) : '');
+
+  // The one fix sentence — now FULLY producer-FR (the screenshot moment can't be half-English).
+  // issueSummary() returns the localized one-line "what's wrong + what to do" per issue.
   const oneThing = $derived.by(() => {
     if (!topFix) return '';
-    const move = recommendationFor(topFix.type as IssueType);
-    return `${move.title}. ${topFix.summary}`;
+    return (i18n.locale, issueSummary(topFix.type as IssueType));
   });
 
-  // Analyze progress percentage (Claude Design "SCANNING · NN%").
-  let analyzePct = $state(0);
+  // The honesty receipt: one line of what Cue actually heard, under the verdict.
+  const receipt = $derived(mix && result ? (i18n.locale, honestyReceipt(mix, result)) : '');
+
+  // Path A suggestions: up to 3 deterministic routes for the active issues.
+  const suggestions = $derived(diagnostics?.suggestions ?? []);
+  const topRoute = $derived(suggestions[0] ?? null);
+  const extraRoutes = $derived(suggestions.slice(1, 3));
+
+  // Listening progress as a 0..1 fraction (real stage completion, not a timer).
+  const progressFrac = $derived(loading ? stageDone / ANALYSIS_STAGES.length : 0);
 
   const categoryLabel: Record<string, string> = {
     'sound-design': 'Sound design', 'mixing': 'Mixing', 'mastering': 'Mastering'
@@ -361,299 +400,286 @@
 </script>
 
 <!-- ============================================================================
-     CuePoint app - EXACT port of the Claude Design brand system. Dark "Ink" stage,
-     full-bleed real-time 3D Cue behind, three screens: UPLOAD / LISTENING / VERDICT.
-     The DSP brain is the source of truth; the verdict maps to SEND IT / ONE THING /
-     NOT YET with Cue's verdict colours.
+     "Silence" — one breathing column on a Slate ground. Exactly one object on screen.
+     The droplet appears only on upload/listening/verdict, never behind the fix worklist.
+     ZERO cards: the fix is a typographic worklist, the verdict a spoken word + one line.
      ============================================================================ -->
-<div class="cp-stage">
-  <!-- full-bleed 3D Cue -->
-  <div class="cp-cue">
-    <Cue mood={loading ? 'listening' : (mix ? cueMood : 'idle')} interactive={false} autoRotate={true} />
-  </div>
-
-  <!-- top bar -->
-  <div class="cp-topbar">
-    <div style="display:flex;align-items:center;gap:9px;">
-      <span class="cp-mono" style="font-size:11px;letter-spacing:0.3em;color:#cfd5db;">CUEPOINT</span>
-      <span class="cp-dot" style="background:{loading ? '#2FCDE6' : (mix ? verdictColor : '#2FCDE6')};"></span>
-    </div>
-    <span class="cp-mono" style="font-size:10px;letter-spacing:0.18em;color:#5b636b;">PRIVATE · IN-BROWSER</span>
-  </div>
-
-  <!-- STEP 1 : UPLOAD -->
-  {#if !loading && !result && !error}
-    <div class="cp-screen">
-      <div class="cp-mono" style="font-size:11px;letter-spacing:0.24em;color:#2FCDE6;margin-bottom:22px;">STEP 01 / UPLOAD</div>
-      <h1 class="cp-display" style="font-size:clamp(46px,12vw,118px);">DROP A<br>BOUNCE</h1>
-      <p class="cp-lede">Your track, your machine. Cue listens for a few seconds and tells you the one thing to fix first.</p>
-
-      <!-- genre chips (our wedge: no reference track needed) -->
-      <div class="cp-mono" style="font-size:10px;letter-spacing:0.2em;color:#6f7880;margin-bottom:12px;">WHAT IS IT?</div>
-      <div class="cp-chips">
-        {#each GENRES as g (g.id)}
-          <button class="cp-chip" class:on={genre === g.id} onclick={() => pickGenre(g.id)}>{g.label}</button>
-        {/each}
-      </div>
-
-      <label class="cp-dropzone">
-        <input type="file" accept="audio/*" class="sr-only-focusable" aria-label="Choose an audio file to analyze" onchange={handleFile} />
-        <svg viewBox="0 0 120 90" width="46" height="34" aria-hidden="true"><path d="M96,20 L96,52 L44,52 M44,52 L62,34 M44,52 L62,70" fill="none" stroke="#ECEDEE" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"></path></svg>
-        <span style="text-align:left;">
-          <span style="display:block;font-weight:700;font-size:17px;">Drop a track or click</span>
-          <span class="cp-mono" style="display:block;font-size:11px;color:#6f7880;letter-spacing:0.1em;margin-top:3px;">MP3 / WAV · NOTHING LEAVES YOUR BROWSER</span>
-        </span>
-      </label>
+<div class="room" class:fix-mode={showFix}>
+  {#if !showFix && !showCold && !showCharacter}
+    <div class="room-cue" aria-hidden="true">
+      <Cue size={180} mood={loading ? 'listening' : (mix ? cueMood : 'idle')} interactive={false} autoRotate={true} />
     </div>
   {/if}
 
-  <!-- STEP 2 : LISTENING -->
-  {#if loading}
-    <div class="cp-screen">
-      <div class="cp-mono" style="font-size:11px;letter-spacing:0.24em;color:#2FCDE6;margin-bottom:30px;">STEP 02 / LISTENING</div>
-      <div class="cp-eq">
-        {#each Array(28) as _, i}
-          <div class="cp-eqbar" style="height:{22 + ((i * 37) % 60)}px;animation-delay:{((i * 53) % 80) / 100}s;{i % 7 === 3 ? 'background:#C9F23C;' : ''}"></div>
-        {/each}
-      </div>
-      <h2 style="margin:0;font-size:clamp(26px,5vw,44px);font-weight:600;letter-spacing:-0.02em;">Cue is listening<span class="cp-dots">...</span></h2>
-      <div class="cp-progress"><div class="cp-fill" style="width:{analyzePct}%;"></div></div>
-      <div class="cp-mono" style="font-size:12px;color:#6f7880;letter-spacing:0.16em;margin-top:14px;">SCANNING · {Math.round(analyzePct)}%</div>
+  <!-- UPLOAD (direct nav to analyzer, no file in flight) — same invitation as Home -->
+  {#if !loading && !result && !error && !showCold && !showCharacter}
+    <div class="column">
+      <p class="invite reveal">{t('home.invite')}</p>
+      <p class="ash reveal" style="--i:1;">{t('home.whisper')}</p>
+      <label class="upload-hit reveal" style="--i:2;">
+        <input type="file" accept="audio/*" class="sr-only-focusable" aria-label={t('home.invite')} onchange={handleFile} />
+      </label>
+      <button class="link ash cold-door reveal" style="--i:3;" onclick={() => showCold = true}>{t('home.knowAlready')}</button>
+    </div>
+  {/if}
 
-      <!-- Named, determinate stepper (retour #1): you SEE where Cue is - each finished
-           stage ticks to a check, the active one pulses. The stepIndex is already
-           driven by the real DSP progress above. -->
-      <ol class="cp-stepper" aria-label="Analysis progress">
-        {#each STEPS as label, i}
-          <li class="cp-step" class:done={i < stepIndex} class:active={i === stepIndex}>
-            <span class="cp-step-mark" aria-hidden="true">
-              {#if i < stepIndex}&#10003;{:else if i === stepIndex}&#9679;{:else}&#9675;{/if}
-            </span>
-            <span class="cp-step-label">{label}</span>
-          </li>
+  <!-- LISTENING -->
+  {#if loading}
+    <div class="column">
+      {#if file}<p class="sentence ash reveal">{file.name}</p>{/if}
+      <div class="progress reveal" style="--i:1;"><span class="progress-fill" style="width:{Math.round(progressFrac * 100)}%;"></span></div>
+      <ol class="stepper reveal" style="--i:2;" aria-label="Analyse">
+        {#each ANALYSIS_STAGES as stage, i}
+          <li class="step" class:done={i < stageDone} class:active={i === stageDone}>{t(STAGE_KEY[stage])}</li>
         {/each}
       </ol>
     </div>
   {/if}
 
-  <!-- error -->
-  {#if error}
-    <div class="cp-screen">
-      <div class="cp-mono" style="font-size:11px;letter-spacing:0.24em;color:#F73CB0;margin-bottom:18px;">COULD NOT READ</div>
-      <p class="cp-lede" style="color:#ECEDEE;">{error}</p>
-      <label class="cp-dropzone" style="margin-top:8px;">
+  <!-- ERROR -->
+  {#if error && !loading}
+    <div class="column">
+      <p class="sentence reveal">{error}</p>
+      <label class="link reveal" style="--i:1;">
         <input type="file" accept="audio/*" class="sr-only-focusable" onchange={handleFile} />
-        <span style="font-weight:700;font-size:16px;">Try another file</span>
+        {t('an.tryAnother')}
       </label>
     </div>
   {/if}
 
-  <!-- STEP 3 : VERDICT -->
-  {#if result && diagnostics && mix && !loading}
-    <div class="cp-screen cp-verdict">
-      <div class="cp-mono" style="font-size:11px;letter-spacing:0.24em;color:#6f7880;margin-bottom:14px;">STEP 03 / VERDICT · MIX SCORE</div>
-      <div class="cp-mono" style="font-weight:500;letter-spacing:-0.02em;line-height:1;margin-bottom:6px;">
-        <span style="font-size:clamp(56px,12vw,116px);">{mix.score}</span><span style="font-size:clamp(22px,4vw,40px);color:#6f7880;">/100</span>
-      </div>
-      <h1 class="cp-display" style="font-size:clamp(48px,13vw,150px);letter-spacing:-0.01em;line-height:0.96;color:{verdictColor};">{verdictWord}</h1>
+  <!-- VERDICT -->
+  {#if result && diagnostics && mix && !loading && !showFix}
+    <div class="column">
+      {#if memory?.headline}<p class="memory ash reveal">↗ {memory.headline}</p>{/if}
+      <h1 class="verdict-word reveal" style="--i:1;">{verdictWord}<span class="vdot" style="color:{verdictColor};">.</span></h1>
+      <p class="sentence reveal" style="--i:2;">{oneThing}</p>
+      <p class="receipt mono reveal" style="--i:3;">{receipt}</p>
 
-      {#if memory?.headline}
-        <div class="cp-memory">
-          <span style="color:{verdictColor};">&#8599;</span> {memory.headline}
-        </div>
-      {/if}
-
-      <div class="cp-card">
-        <div class="cp-mono" style="font-size:11px;letter-spacing:0.16em;color:{verdictColor};margin-bottom:10px;">THE ONE THING &#8629;</div>
-        <div style="font-size:clamp(15px,2.3vw,18px);font-weight:500;line-height:1.5;color:#ECEDEE;">{oneThing}</div>
+      <div class="actions reveal" style="--i:4;">
+        <button class="link tide" onclick={() => showFix = true}>{t('an.walkMeThrough')} →</button>
+        <button class="link" onclick={() => showMore = !showMore}>{showMore ? t('an.hide') : t('an.numbers')}</button>
+        <button class="link" onclick={() => showCold = true}>{t('home.knowAlready')}</button>
       </div>
 
-      <!-- 3 translated stats (truthful numbers, brand styling) -->
-      <div class="cp-stats">
-        {#each [['LOUDNESS', result.lufsEstimate + ' LUFS', mix.loudnessHuman], ['TRUE PEAK', result.truePeakEstimate + ' dBTP', mix.truePeakHuman], ['MONO', String(result.phaseCorrelation), mix.monoHuman]] as [k, v, human]}
-          <div class="cp-stat">
-            <div class="cp-mono" style="font-size:10px;letter-spacing:0.14em;color:#6f7880;">{k}</div>
-            <div style="font-weight:700;font-size:18px;margin-top:3px;">{v}</div>
-            <div style="font-size:12px;color:#aeb6bd;margin-top:2px;">{human}</div>
+      {#if showMore}
+        <div class="fold reveal">
+          <p class="ash mono small">{t('an.mixScore')} · {mix.score}/100</p>
+          <div class="numbers">
+            <span><b>{result.lufsEstimate}</b> LUFS</span>
+            <span><b>{result.truePeakEstimate}</b> dBTP</span>
+            <span><b>{result.phaseCorrelation}</b> {t('stat.mono')}</span>
+            <span><b>{result.peakDb}</b> dBFS</span>
+            <span><b>{result.rmsDb}</b> RMS</span>
+            <span><b>{result.spectralTiltDbPerOct}</b> tilt</span>
           </div>
-        {/each}
-      </div>
-
-      <!-- coaching CTA -->
-      {#if coachBusy}
-        <div class="cp-mono" style="margin-top:22px;color:#aeb6bd;letter-spacing:0.12em;">{coachStage || 'CUE IS THINKING...'}</div>
-      {:else if coachText}
-        <div class="cp-card" style="margin-top:18px;">
-          <div class="cp-mono" style="font-size:11px;letter-spacing:0.16em;color:{verdictColor};margin-bottom:10px;">CUE'S COACHING{coachUsedAI ? ' · AI' : ''}</div>
-          <div style="font-size:16px;line-height:1.55;color:#ECEDEE;">{coachText}</div>
-        </div>
-      {:else}
-        <button class="cp-primary" onclick={() => askCoach(!!user)}>
-          WALK ME THROUGH THE FIX{#if user && credits > 0} · {credits} LEFT{:else} · FIRST TRACK FREE{/if}
-        </button>
-      {/if}
-
-      {#if showPacks}
-        <div class="cp-card" style="margin-top:16px;text-align:left;">
-          {#if !user}
-            <div style="font-weight:700;font-size:18px;margin-bottom:6px;">Your mastering engineer. 1&euro;, not 200&euro;.</div>
-            <p style="color:#aeb6bd;font-size:14px;line-height:1.5;">Sign in with Google, then unlock Cue's full coaching for this track. No subscription, no trap.</p>
-            {#if onNavigate}<button class="cp-primary" style="margin-top:12px;" onclick={() => onNavigate!('projects')}>SIGN IN TO CONTINUE</button>{/if}
-          {:else}
-            <div style="font-weight:700;font-size:18px;margin-bottom:10px;">Unlock Cue's AI coaching</div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;">
-              <button class="appbtn" disabled={buying} onclick={() => buyPack('single')}>1 TRACK · 1&euro;</button>
-              <button class="appbtn" disabled={buying} onclick={() => buyPack('five')}>5 TRACKS · 4&euro;</button>
-              <button class="appbtn" disabled={buying} onclick={() => buyPack('twelve')}>12 TRACKS · 8&euro;</button>
-            </div>
-            <div class="cp-mono" style="font-size:10px;color:#6f7880;margin-top:10px;letter-spacing:0.12em;">CREDITS NEVER EXPIRE · NO SUBSCRIPTION</div>
-          {/if}
-        </div>
-      {/if}
-
-      <!-- quiet reveal row -->
-      <div class="cp-reveals">
-        <button class="cp-reveal" onclick={() => showBreakdown = !showBreakdown}>{showBreakdown ? 'HIDE' : 'FULL'} BREAKDOWN</button>
-        <button class="cp-reveal" onclick={() => showNumbers = !showNumbers}>{showNumbers ? 'HIDE' : 'ALL'} NUMBERS</button>
-        <button class="cp-reveal" onclick={() => showShare = !showShare}>SHARE</button>
-      </div>
-
-      {#if showBreakdown}
-        <div class="cp-fold">
-          <div class="cp-mono" style="font-size:11px;letter-spacing:0.16em;color:#6f7880;margin-bottom:10px;">FOUR BANDS VS THE {(genre ?? 'TYPICAL').toUpperCase()} TARGET</div>
-          {#each mix.bands as b (b.key)}
-            <div class="cp-bandrow">
-              <span class="cp-mono" style="font-size:11px;color:{b.state === 'high' ? '#F73CB0' : b.state === 'low' ? '#2FCDE6' : '#C9F23C'};min-width:13ch;letter-spacing:0.1em;">{b.label.toUpperCase()}</span>
-              <span style="font-size:13px;color:#aeb6bd;">{b.human}</span>
-            </div>
-          {/each}
-          {#if diagnostics.suggestions.length > 0 && onOpenRecipe}
-            <div class="cp-mono" style="font-size:11px;letter-spacing:0.16em;color:#6f7880;margin:14px 0 8px;">RECIPES THAT FIX IT</div>
-            {#each diagnostics.suggestions as recipe (recipe.id)}
-              <button class="cp-reciperow" onclick={() => onOpenRecipe!(recipe.id)}>
-                <span style="font-weight:600;font-size:14px;">{recipe.title}</span>
-                <span class="cp-mono" style="font-size:11px;color:#2FCDE6;">{categoryLabel[recipe.category] ?? recipe.category} &rarr;</span>
-              </button>
-            {/each}
-          {/if}
-        </div>
-      {/if}
-
-      {#if showNumbers}
-        <div class="cp-fold">
-          <div class="cp-mono" style="font-size:11px;letter-spacing:0.16em;color:#6f7880;margin-bottom:10px;">EVIDENCE</div>
-          <div class="cp-evidence">
-            {#each [['LUFS', result.lufsEstimate], ['TRUE PEAK', result.truePeakEstimate + ' dBTP'], ['PHASE', result.phaseCorrelation], ['PEAK', result.peakDb + ' dBFS'], ['RMS', result.rmsDb + ' dB'], ['TILT', result.spectralTiltDbPerOct]] as [k, v]}
-              <div class="cp-stat">
-                <div class="cp-mono" style="font-size:9px;letter-spacing:0.14em;color:#6f7880;">{k}</div>
-                <div style="font-weight:700;font-size:16px;margin-top:2px;">{v}</div>
-              </div>
+          <p class="ash mono small" style="margin-top:24px;">{t('an.genreCorrect')}</p>
+          <div class="genre-correct">
+            {#each GENRES as g (g.id)}
+              <button class="link" class:tide={genre === g.id} onclick={() => pickGenre(g.id)}>{t('genre.' + g.id)}</button>
             {/each}
           </div>
-        </div>
-      {/if}
-
-      {#if showShare}
-        <div class="cp-fold" style="display:flex;justify-content:center;">
-          <ShareCard {mix} {genre} fileName={file?.name ?? 'my track'} />
         </div>
       {/if}
 
       {#if user && projects.length > 0}
-        <div class="cp-fold" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:center;">
-          <select bind:value={selectedProjectId} class="cp-select">
-            <option value="">Pin to a project...</option>
+        <div class="pin reveal">
+          <select bind:value={selectedProjectId}>
+            <option value="">{t('an.pinProject')}</option>
             {#each projects as project (project.id)}<option value={project.id}>{project.name}</option>{/each}
           </select>
-          <button class="appbtn" disabled={!selectedProjectId || savingSnapshot} onclick={saveSnapshot}>{savingSnapshot ? 'SAVING...' : 'PIN IT'}</button>
-          {#if snapshotSaved}<span class="cp-mono" style="font-size:11px;color:#C9F23C;">SAVED</span>{/if}
+          <button class="link" disabled={!selectedProjectId || savingSnapshot} onclick={saveSnapshot}>{savingSnapshot ? t('an.saving') : t('an.pinIt')}</button>
+          {#if snapshotSaved}<span class="tide small">{t('an.saved')}</span>{/if}
         </div>
       {/if}
 
-      <button class="appbtn" style="margin-top:26px;" onclick={analyzeAnother}>&#8635; ANALYZE ANOTHER</button>
+      <button class="link analyze-again" onclick={analyzeAnother}>↻ {t('an.analyzeAnother')}</button>
     </div>
+  {/if}
+
+  <!-- THE FIX (Path A continuation) — a scannable worklist, no card -->
+  {#if result && diagnostics && mix && !loading && showFix}
+    <div class="column top">
+      <p class="ash small">{verdictWord} — {moveTitle}</p>
+      <div class="horizon" style="margin:14px 0 28px;"></div>
+      {#if topRoute}
+        <p class="goal reveal">{topRoute.goal}</p>
+        <p class="ash mono small reveal" style="--i:1;">{t('fix.stepCount')} 1 {t('fix.stepOf')} {topRoute.chain.length}</p>
+        <ol class="worklist">
+          {#each topRoute.chain as step, i}
+            <li class="work-step reveal" style="--i:{i + 2};">
+              <span class="work-idx tide mono">{String(i + 1).padStart(2, '0')}</span>
+              <span class="work-body">
+                <span class="work-plugin">{step.plugin}</span>
+                <span class="work-role ash">{step.role}</span>
+                <span class="work-param mono ash">{step.params}</span>
+              </span>
+            </li>
+          {/each}
+        </ol>
+
+        <div class="alts reveal">
+          {#if topRoute.native_alt}<details><summary class="link">{t('fix.native')}</summary><p class="mono ash small">{topRoute.native_alt}</p></details>{/if}
+          {#if topRoute.ableton_notes}<details><summary class="link">{t('fix.notes')}</summary><p class="ash small">{topRoute.ableton_notes}</p></details>{/if}
+          {#if onOpenRecipe}<button class="link" onclick={() => onOpenRecipe?.(topRoute.id)}>{t('fix.openRoute')} →</button>{/if}
+        </div>
+
+        {#if extraRoutes.length > 0}
+          <div class="horizon" style="margin:28px 0 18px;"></div>
+          {#if !showMoreRoutes}
+            <button class="link ash" onclick={() => showMoreRoutes = true}>{extraRoutes.length} {t('fix.moreRoutes')} ↓</button>
+          {:else}
+            {#each extraRoutes as r (r.id)}
+              <button class="alt-route reveal" onclick={() => onOpenRecipe?.(r.id)}>
+                <span class="work-plugin">{r.title}</span>
+                <span class="ash small">{r.goal}</span>
+              </button>
+            {/each}
+          {/if}
+        {/if}
+      {/if}
+
+      <p class="closing reveal">{t('fix.closing')}</p>
+      <div class="actions">
+        <button class="link ash" onclick={() => showCharacter = true}>{t('fix.characterLane')} →</button>
+        <button class="link ash" onclick={() => showFix = false}>{t('cold.back')}</button>
+        <button class="link ash" onclick={analyzeAnother}>↻ {t('an.analyzeAnother')}</button>
+      </div>
+    </div>
+  {/if}
+
+  <!-- COLD ENTRY (Path B) — a typeset contents page of the 5 needs -->
+  {#if showCold && !loading}
+    <div class="column">
+      <h1 class="question reveal">{t('cold.question')}</h1>
+      <p class="ash reveal" style="--i:1;">{t('cold.sub')}</p>
+      <ol class="contents">
+        {#each COLD_NEEDS as need, i (need)}
+          <li class="content-row reveal" style="--i:{i + 2};">
+            <button class="content-link" onclick={() => pickNeed(need)}>
+              <span class="row-num mono ash">{String(i + 1).padStart(2, '0')}</span>
+              <span class="row-need">{t('coldrow.' + need)}</span>
+              <span class="row-dots"></span>
+              <span class="row-tag mono ash">{t('coldtag.' + need)}</span>
+            </button>
+          </li>
+        {/each}
+        <li class="content-row reveal" style="--i:6;">
+          <button class="content-link" onclick={() => { showCold = false; }}>
+            <span class="row-num mono ash">05</span>
+            <span class="row-need">{t('coldrow.healthy')}</span>
+            <span class="row-dots"></span>
+            <span class="row-tag mono ash">{t('coldtag.healthy')}</span>
+          </button>
+        </li>
+      </ol>
+      <div class="actions">
+        <button class="link ash" onclick={() => showCharacter = true}>{t('cold.characterFooter')}</button>
+        <button class="link ash" onclick={() => showCold = false}>{t('cold.back')}</button>
+      </div>
+    </div>
+  {/if}
+
+  <!-- CHARACTER lane (browse-only taste, never a verdict) -->
+  {#if showCharacter}
+    <div class="column top">
+      <p class="ash small">{t('need.character')}</p>
+      <div class="horizon" style="margin:14px 0 28px;"></div>
+      <ol class="worklist">
+        {#each characterRoutes() as r, i (r.id)}
+          <li class="char-row reveal" style="--i:{i};">
+            <button class="content-link" onclick={() => onOpenRecipe?.(r.id)}>
+              <span class="work-plugin">{r.title}</span>
+              <span class="ash small">{r.goal}</span>
+            </button>
+          </li>
+        {/each}
+      </ol>
+      <button class="link ash" style="margin-top:32px;" onclick={() => showCharacter = false}>{t('cold.back')}</button>
+    </div>
+  {/if}
+
+  {#if showShare && mix}
+    <div class="column"><ShareCard {mix} {genre} fileName={file?.name ?? 'my track'} /></div>
   {/if}
 </div>
 
 <style>
-  .cp-stage { position: relative; width: 100%; min-height: calc(100dvh - 64px); overflow: hidden;
-    background: radial-gradient(64% 56% at 50% 42%, #1b2128 0%, #11151a 52%, #080a0d 100%);
-    font-family: var(--font-sans); color: #ECEDEE; }
-  .cp-cue { position: absolute; inset: 0; z-index: 0; }
-  .cp-mono { font-family: 'JetBrains Mono', monospace; }
-  .cp-topbar { position: absolute; left: 0; right: 0; top: 0; display: flex; justify-content: space-between;
-    align-items: center; padding: 22px 26px; z-index: 5; pointer-events: none; }
-  .cp-dot { width: 5px; height: 5px; border-radius: 50%; display: inline-block; transition: background .6s ease; }
-  .cp-screen { position: relative; z-index: 4; min-height: calc(100dvh - 64px); display: flex; flex-direction: column;
-    align-items: center; justify-content: center; text-align: center; padding: 80px 24px 48px; }
-  .cp-verdict { justify-content: flex-start; padding-top: clamp(70px, 12vh, 130px); }
-  /* Big display titles in JetBrains Mono now (Adam: the machine's voice). Mono needs
-     air, so no skew and a touch of positive tracking; weight 700 (no 900 in mono). */
-  .cp-display { margin: 0; font-family: 'JetBrains Mono', monospace; font-weight: 700; letter-spacing: -0.01em; line-height: 0.96; }
-  .cp-lede { font-size: clamp(15px, 2.2vw, 19px); color: #aeb6bd; max-width: 440px; margin: 26px 0 22px; line-height: 1.45; }
-  .cp-chips { display: flex; gap: 7px; flex-wrap: wrap; justify-content: center; max-width: 500px; margin-bottom: 28px; }
-  .cp-chip { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.06em; padding: 8px 15px;
-    border-radius: 999px; border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.02); color: #aeb6bd;
-    cursor: pointer; transition: border-color .2s ease, color .2s ease, background .2s ease, box-shadow .2s ease; }
-  .cp-chip:hover { border-color: rgba(47,205,230,0.55); color: #fff; }
-  .cp-chip.on { background: #2FCDE6; border-color: #2FCDE6; color: #0a0c0f; font-weight: 500;
-    box-shadow: 0 0 22px rgba(47,205,230,0.35); }
-  .cp-dropzone { cursor: pointer; border: 1.5px dashed rgba(255,255,255,0.28); background: rgba(255,255,255,0.03);
-    border-radius: 22px; padding: 24px 32px; display: flex; align-items: center; gap: 18px; transition: all .25s ease; }
-  .cp-dropzone:hover { border-color: rgba(47,205,230,0.6); background: rgba(47,205,230,0.06); }
-  .cp-eq { display: flex; align-items: center; gap: 5px; height: 90px; margin-bottom: 34px; }
-  .cp-eqbar { width: 4px; border-radius: 3px; background: #2FCDE6; transform-origin: center; transform: scaleY(0.3);
-    animation: cpeq 0.9s ease-in-out infinite; }
-  @keyframes cpeq { 0%,100% { transform: scaleY(0.28); } 50% { transform: scaleY(1); } }
-  .cp-dots::after { content: ''; }
-  .cp-progress { width: min(360px, 72vw); height: 3px; border-radius: 3px; background: rgba(255,255,255,0.12);
-    margin-top: 30px; overflow: hidden; }
-  .cp-fill { height: 100%; background: #2FCDE6; border-radius: 3px; transition: width .2s linear; }
+  .room { position: relative; min-height: calc(100dvh - 64px); }
+  .room-cue {
+    position: absolute; left: 50%; top: 30%; transform: translate(-50%, -50%);
+    width: 180px; height: 180px; z-index: 1; pointer-events: none;
+    transition: opacity .6s var(--ease-calm);
+  }
 
-  /* Named stepper: each stage ticks done, the active one pulses cyan. */
-  .cp-stepper { list-style: none; margin: 24px 0 0; padding: 0; display: flex; flex-direction: column;
-    gap: 9px; align-items: flex-start; text-align: left; }
-  .cp-step { display: flex; align-items: center; gap: 11px;
-    font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.08em;
-    color: #5b636b; transition: color .35s ease; }
-  .cp-step-mark { width: 16px; display: inline-flex; justify-content: center; font-size: 12px; }
-  .cp-step.done { color: #aeb6bd; }
-  .cp-step.done .cp-step-mark { color: #C9F23C; }              /* completed = volt lime check */
-  .cp-step.active { color: #ECEDEE; }
-  .cp-step.active .cp-step-mark { color: #2FCDE6; animation: cpPulse 1s ease-in-out infinite; }
-  @keyframes cpPulse { 0%,100% { opacity: 0.4; transform: scale(0.85); } 50% { opacity: 1; transform: scale(1.15); } }
-  .cp-memory { display: inline-flex; align-items: center; gap: 8px; margin-top: 18px; font-size: 14px; font-weight: 500;
-    color: #ECEDEE; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 999px;
-    padding: 8px 16px; }
-  .cp-card { margin-top: 26px; max-width: min(520px, 88vw); width: 100%; border: 1px solid rgba(255,255,255,0.1);
-    background: rgba(14,17,22,0.55); border-radius: 18px; padding: 22px 26px; text-align: left; backdrop-filter: blur(6px); }
-  .cp-stats { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 18px; }
-  .cp-stat { border: 1px solid rgba(255,255,255,0.1); background: rgba(14,17,22,0.5); border-radius: 12px;
-    padding: 10px 14px; min-width: 9rem; text-align: left; }
-  .cp-primary { margin-top: 22px; font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.14em;
-    padding: 15px 24px; border-radius: 999px; border: none; background: #2FCDE6; color: #0a0c0f; font-weight: 700;
-    cursor: pointer; transition: transform .1s ease, filter .2s ease; }
-  .cp-primary:hover { filter: brightness(1.08); }
-  .cp-primary:active { transform: scale(0.98); }
-  .appbtn { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.12em; padding: 9px 15px;
-    border-radius: 999px; border: 1px solid rgba(255,255,255,0.16); background: transparent; color: #aeb6bd; cursor: pointer;
-    transition: all .25s ease; }
-  .appbtn:hover { border-color: rgba(255,255,255,0.45); color: #fff; }
-  .appbtn:disabled { opacity: 0.5; cursor: not-allowed; }
-  .cp-reveals { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; margin-top: 22px; }
-  .cp-reveal { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.14em; color: #6f7880;
-    background: none; border: none; cursor: pointer; border-bottom: 1px dashed rgba(255,255,255,0.2); padding-bottom: 2px; }
-  .cp-reveal:hover { color: #ECEDEE; border-color: #ECEDEE; }
-  .cp-fold { margin-top: 18px; max-width: min(560px, 92vw); width: 100%; text-align: left;
-    border-top: 1px solid rgba(255,255,255,0.08); padding-top: 16px; animation: fadeUp .4s ease both; }
-  @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
-  .cp-bandrow { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.06); }
-  .cp-reciperow { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 10px;
-    background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 10px 14px;
-    margin-top: 6px; cursor: pointer; color: #ECEDEE; text-align: left; }
-  .cp-reciperow:hover { border-color: rgba(47,205,230,0.5); }
-  .cp-evidence { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 8px; }
-  .cp-select { width: auto; min-width: 170px; background: rgba(14,17,22,0.7); color: #ECEDEE;
-    border: 1px solid rgba(255,255,255,0.16); border-radius: 10px; padding: 9px 12px; cursor: pointer; }
-  @media (prefers-reduced-motion: reduce) { .cp-eqbar, .cp-step.active .cp-step-mark { animation: none; } }
+  .invite { font-family: var(--font-serif); font-weight: 300; font-size: clamp(22px, 4vw, 30px); color: var(--color-text); text-align: center; margin: 0; }
+  .upload-hit { position: absolute; inset: 0; cursor: pointer; z-index: 3; display: block; }
+  .cold-door { position: relative; z-index: 4; margin-top: 48px; align-self: center; }
+
+  .verdict-word {
+    font-family: var(--font-serif); font-weight: 300;
+    font-size: var(--step-hero); line-height: 0.96; letter-spacing: -0.02em;
+    color: var(--color-text); text-align: center; margin: 0;
+  }
+  .vdot { font-weight: 400; }
+
+  .sentence { font-family: var(--font-sans); font-size: clamp(17px, 2.4vw, 20px); line-height: 1.5; color: var(--color-text); text-align: center; margin: 56px 0 0; max-width: 30ch; align-self: center; }
+  .memory { text-align: center; margin: 0 0 8px; font-size: 13px; }
+  .receipt { align-self: center; margin: 18px 0 0; font-size: 12px; color: var(--color-text-muted); letter-spacing: 0.02em; text-align: center; }
+
+  .ash { color: var(--color-text-muted); }
+  .tide { color: var(--color-cyan); }
+  .small { font-size: 12px; }
+  .mono { font-family: var(--font-mono); }
+
+  .link { font-family: var(--font-sans); font-size: 14px; color: var(--color-text-secondary); background: none; border: none; padding: 0; cursor: pointer; transition: color .25s var(--ease-calm); }
+  .link:hover { color: var(--color-text); }
+  .link.tide { color: var(--color-cyan); }
+  .link:disabled { opacity: .4; cursor: not-allowed; }
+
+  .actions { display: flex; gap: 28px; flex-wrap: wrap; justify-content: center; margin-top: 56px; }
+  .analyze-again { margin-top: 40px; align-self: center; color: var(--color-text-muted); }
+
+  .progress { width: 100%; max-width: 360px; height: 1px; background: var(--color-hairline); align-self: center; overflow: hidden; }
+  .progress-fill { display: block; height: 100%; background: var(--color-cyan); transition: width .4s linear; }
+  .stepper { list-style: none; display: flex; gap: 22px; justify-content: center; padding: 0; margin: 24px 0 0; flex-wrap: wrap; }
+  .step { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em; color: var(--color-text-muted); transition: color .35s var(--ease-calm); }
+  .step.done { color: var(--color-text-secondary); }
+  .step.active { color: var(--color-cyan); }
+
+  .fold { margin-top: 40px; align-self: stretch; }
+  .numbers { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 16px 24px; margin-top: 14px; }
+  .numbers span { font-family: var(--font-mono); font-size: 12px; color: var(--color-text-muted); }
+  .numbers b { display: block; font-size: 17px; color: var(--color-text); font-weight: 500; }
+  .genre-correct { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 14px; }
+
+  .pin { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; justify-content: center; margin-top: 40px; }
+  .pin select { width: auto; min-width: 180px; }
+
+  .goal { font-family: var(--font-serif); font-weight: 300; font-size: clamp(18px, 3vw, 24px); line-height: 1.3; color: var(--color-text); margin: 0 0 18px; }
+  .worklist { list-style: none; padding: 0; margin: 18px 0 0; display: flex; flex-direction: column; gap: var(--gap-verse); }
+  .work-step { display: grid; grid-template-columns: 2ch 1fr; gap: 16px; align-items: baseline; }
+  .work-idx { font-size: 13px; }
+  .work-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .work-plugin { font-family: var(--font-sans); font-size: 15px; font-weight: 500; color: var(--color-text); }
+  .work-role { font-size: 13px; }
+  .work-param { font-size: 12px; line-height: 1.5; word-break: break-word; }
+  .alts { display: flex; gap: 24px; flex-wrap: wrap; margin-top: 32px; align-items: baseline; }
+  .alts details { font-size: 13px; }
+  .alts summary { list-style: none; }
+  .alt-route { display: flex; flex-direction: column; gap: 4px; text-align: left; background: none; border: none; cursor: pointer; padding: 12px 0; }
+  .closing { font-family: var(--font-serif); font-weight: 300; font-style: italic; color: var(--color-text-muted); margin: 40px 0 0; }
+
+  .question { font-family: var(--font-serif); font-weight: 300; font-size: clamp(24px, 5vw, 38px); line-height: 1.1; color: var(--color-text); margin: 0; }
+  .contents { list-style: none; padding: 0; margin: var(--gap-verse) 0 0; display: flex; flex-direction: column; gap: 32px; }
+  .content-link { display: grid; grid-template-columns: 3ch 1fr auto; gap: 12px; align-items: baseline; width: 100%; background: none; border: none; cursor: pointer; text-align: left; }
+  .row-num { font-size: 12px; }
+  .row-need { font-family: var(--font-serif); font-weight: 300; font-size: clamp(18px, 3vw, 24px); color: var(--color-text-secondary); transition: color .25s var(--ease-calm); }
+  .content-link:hover .row-need { color: var(--color-text); }
+  .row-dots { border-bottom: 1px dotted var(--color-hairline); align-self: center; height: 1px; }
+  .row-tag { font-size: 11px; }
+  .char-row { padding: 0; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .progress-fill, .room-cue { transition: none; }
+  }
 </style>

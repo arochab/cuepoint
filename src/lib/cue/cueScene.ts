@@ -17,12 +17,16 @@ import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLigh
 
 export type CueVerdict = 'idle' | 'analyzing' | 'send' | 'one' | 'not';
 
+// "Silence" reshape: the droplet is demoted to a single quiet object (no longer wallpaper).
+// rot is halved (calmer spin) and bloom is *0.6 (less glow) vs the original brand values.
+// The lime/magenta cores STAY — the droplet is now the ONLY place those colours live, so
+// verdict hue carries real meaning (cyan=one / lime=send / magenta=not) instead of decoration.
 const STATES: Record<CueVerdict, { cyan: number; mag: number; lime: number; atten: string; core: string; coreOp: number; bloom: number; rot: number }> = {
-  idle:      { cyan: 2.8, mag: 2.1, lime: 1.1, atten: '#cfe7ee', core: '#7fd9ec', coreOp: 0.0,  bloom: 0.28, rot: 0.5 },
-  analyzing: { cyan: 3.8, mag: 1.5, lime: 1.5, atten: '#bfe9f3', core: '#2FCDE6', coreOp: 0.30, bloom: 0.40, rot: 1.4 },
-  send:      { cyan: 1.4, mag: 0.5, lime: 5.6, atten: '#dcf2a8', core: '#C9F23C', coreOp: 0.55, bloom: 0.52, rot: 0.7 },
-  one:       { cyan: 5.6, mag: 1.0, lime: 1.2, atten: '#b6e9f3', core: '#2FCDE6', coreOp: 0.50, bloom: 0.46, rot: 0.6 },
-  not:       { cyan: 0.9, mag: 5.6, lime: 0.5, atten: '#f4c4e2', core: '#F73CB0', coreOp: 0.52, bloom: 0.46, rot: 0.45 }
+  idle:      { cyan: 2.8, mag: 2.1, lime: 1.1, atten: '#cfe7ee', core: '#7fd9ec', coreOp: 0.0,  bloom: 0.168, rot: 0.25 },
+  analyzing: { cyan: 3.8, mag: 1.5, lime: 1.5, atten: '#bfe9f3', core: '#36C9D6', coreOp: 0.30, bloom: 0.240, rot: 0.70 },
+  send:      { cyan: 1.4, mag: 0.5, lime: 5.6, atten: '#dcf2a8', core: '#C9F23C', coreOp: 0.55, bloom: 0.312, rot: 0.35 },
+  one:       { cyan: 5.6, mag: 1.0, lime: 1.2, atten: '#b6e9f3', core: '#36C9D6', coreOp: 0.50, bloom: 0.276, rot: 0.30 },
+  not:       { cyan: 0.9, mag: 5.6, lime: 0.5, atten: '#f4c4e2', core: '#F73CB0', coreOp: 0.52, bloom: 0.276, rot: 0.225 }
 };
 
 export interface CueSceneOpts {
@@ -44,13 +48,9 @@ export function initCueScene(canvas: HTMLCanvasElement, opts: CueSceneOpts = {})
   renderer.outputColorSpace = THREE.SRGBColorSpace;
 
   const scene = new THREE.Scene();
-  const bgC = document.createElement('canvas'); bgC.width = 16; bgC.height = 256;
-  const bx = bgC.getContext('2d')!;
-  const grd = bx.createLinearGradient(0, 0, 0, 256);
-  grd.addColorStop(0, '#3c4550'); grd.addColorStop(0.5, '#1d222a'); grd.addColorStop(1, '#0b0d10');
-  bx.fillStyle = grd; bx.fillRect(0, 0, 16, 256);
-  const bgTex = new THREE.CanvasTexture(bgC); bgTex.colorSpace = THREE.SRGBColorSpace;
-  scene.background = bgTex;
+  // "Silence": no scene background — the droplet floats on the bare Slate ground
+  // (renderer is alpha:true, clearColor 0), so it reads as one object, not wallpaper.
+  scene.background = null;
 
   const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100);
   camera.position.set(0, 0.35, 9.2);
@@ -105,7 +105,7 @@ export function initCueScene(canvas: HTMLCanvasElement, opts: CueSceneOpts = {})
 
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.28, 0.85, 0.95);
+  const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.17, 0.85, 0.95);
   composer.addPass(bloom);
   const FinishShader = {
     uniforms: { tDiffuse: { value: null }, uTime: { value: 0 }, uAberr: { value: 0.0032 }, uVig: { value: 1.15 }, uGrain: { value: 0.05 } },

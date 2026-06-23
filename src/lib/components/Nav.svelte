@@ -1,7 +1,10 @@
 <script lang="ts">
   import type { Route } from '../types/index.js';
-  import Cue from './Cue.svelte';
+  import { i18n, t, toggleLocale } from '../i18n/index.svelte.js';
 
+  // "Silence" nav: no topbar, no pill chips, no brand box. Plain text links, always visible
+  // at low opacity (rising on hover/focus) — never hidden behind a cursor-to-top gesture
+  // (that dies on touch/trackpad). On mobile they collapse to one bottom-fixed quiet row.
   let { route, user, isAdmin = false, onNavigate, onSignOut }: {
     route: Route;
     user: { email?: string } | null;
@@ -10,61 +13,59 @@
     onSignOut: () => void;
   } = $props();
 
-  // Mono uppercase labels only - the Claude Design nav carries no sub-labels.
-  const baseLinks: { route: Route; label: string }[] = [
-    { route: 'recipes', label: 'Recipes' },
-    { route: 'analyzer', label: 'Analyzer' },
-    { route: 'projects', label: 'Projects' }
-  ];
-  // Admin link only appears for admins (the route is also guarded in App + RLS).
-  const links = $derived(
-    isAdmin ? [...baseLinks, { route: 'admin' as Route, label: 'Admin' }] : baseLinks
+  const links = $derived<{ route: Route; labelKey: string }[]>(
+    isAdmin
+      ? [{ route: 'analyzer', labelKey: 'nav.analyzer' }, { route: 'projects', labelKey: 'nav.projects' }, { route: 'admin', labelKey: 'nav.admin' }]
+      : [{ route: 'analyzer', labelKey: 'nav.analyzer' }, { route: 'projects', labelKey: 'nav.projects' }]
   );
 </script>
 
-<header class="topbar">
-  <div class="page-container topbar-inner">
-    <button class="brand" onclick={() => onNavigate('home')}>
-      <span class="brand-mark"><Cue size={32} mood="idle" /></span>
-      <span class="brand-lines">
-        <span class="brand-title">CuePoint <span class="mono muted" style="font-size:10px;margin-left:.25rem;">BETA</span></span>
-        <span class="brand-subtitle">A studio ear, in your browser</span>
-      </span>
+<header class="nav">
+  <button class="wordmark" onclick={() => onNavigate('home')}>cuepoint</button>
+
+  <nav class="links">
+    {#each links as link}
+      <button class="navlink" class:active={route === link.route} onclick={() => onNavigate(link.route)}>{t(link.labelKey)}</button>
+    {/each}
+    <button class="navlink lang" onclick={toggleLocale}>
+      <span class:on={i18n.locale === 'fr'}>FR</span><span class="sep">·</span><span class:on={i18n.locale === 'en'}>EN</span>
     </button>
-
-    <div class="flex items-center gap-3 flex-wrap justify-end">
-      <nav class="nav-cluster">
-        {#each links as link}
-          <button class="nav-item {route === link.route ? 'active' : ''}" aria-current={route === link.route ? 'page' : undefined} onclick={() => onNavigate(link.route)}>
-            {link.label}
-          </button>
-        {/each}
-      </nav>
-
-      {#if user}
-        <div class="flex items-center gap-2" style="border:1px solid var(--color-hairline); border-radius:999px; background:var(--color-paper); padding:6px 8px;">
-          <div class="hidden lg:block px-2 text-right">
-            <div class="mono muted" style="font-size:10px; text-transform:uppercase; letter-spacing:.14em;">Connected</div>
-            <div style="max-width:160px; font-size:12px; color:var(--color-text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{user.email}</div>
-          </div>
-          <button class="btn btn-secondary" style="padding:.7rem .95rem; font-size:.84rem;" onclick={() => onNavigate('projects')}>Workspace</button>
-          <button class="btn btn-ghost" style="padding:.7rem .9rem; font-size:.84rem;" onclick={onSignOut}>Sign out</button>
-        </div>
-      {:else}
-        <button
-          class="btn btn-outline-cyan"
-          style="padding:.82rem 1.05rem; font-family:var(--font-mono); font-size:11px; letter-spacing:0.12em; text-transform:uppercase;"
-          onclick={() => {
-            onNavigate('home');
-            // Send the user to the actual sign-in field, not just the top of home.
-            requestAnimationFrame(() => {
-              const el = document.getElementById('get-access');
-              el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              el?.querySelector('input')?.focus();
-            });
-          }}
-        >Get access</button>
-      {/if}
-    </div>
-  </div>
+    {#if user}
+      <button class="navlink" onclick={onSignOut} title={user.email}>{t('nav.signout')}</button>
+    {/if}
+  </nav>
 </header>
+
+<style>
+  .nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 20;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 24px; pointer-events: none;
+  }
+  .nav > * { pointer-events: auto; }
+  .wordmark {
+    font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.18em;
+    color: var(--color-text-secondary); opacity: .55; transition: opacity .25s var(--ease-calm);
+  }
+  .wordmark:hover { opacity: 1; }
+  .links { display: flex; align-items: center; gap: 22px; }
+  .navlink {
+    font-family: var(--font-sans); font-size: 13px; color: var(--color-text-secondary);
+    opacity: .45; transition: opacity .25s var(--ease-calm), color .25s var(--ease-calm);
+  }
+  .navlink:hover, .navlink:focus-visible { opacity: 1; color: var(--color-text); }
+  .navlink.active { opacity: 1; color: var(--color-text); }
+  .lang { display: inline-flex; gap: 4px; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.1em; }
+  .lang .on { color: var(--color-cyan); }
+  .lang .sep { color: var(--color-text-muted); }
+
+  @media (max-width: 720px) {
+    .nav {
+      top: auto; bottom: 0; padding: 12px 18px;
+      background: var(--color-ink); border-top: 1px solid var(--color-hairline);
+    }
+    .wordmark { display: none; }
+    .links { width: 100%; justify-content: space-around; gap: 12px; }
+    .navlink { opacity: .8; }
+  }
+</style>

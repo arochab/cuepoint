@@ -106,7 +106,19 @@ function kWeight(x: Float32Array, fs: number): Float32Array {
   return x;
 }
 
-export async function analyzeAudio(file: File): Promise<AudioAnalysis> {
+// Named analysis stages, in order. Drives the HONEST listening stepper: each name is
+// reported (via onStage) right before its heavy loop runs, so the progress bar reflects
+// real DSP completion — never a faked 95%-then-snap timer.
+export type AnalysisStage = 'decode' | 'loudness' | 'truepeak' | 'spectrum';
+export const ANALYSIS_STAGES: AnalysisStage[] = ['decode', 'loudness', 'truepeak', 'spectrum'];
+
+// Yield to the event loop so a stage tick can paint before the next blocking loop runs.
+const yieldToPaint = () => new Promise<void>((r) => setTimeout(r, 0));
+
+export async function analyzeAudio(file: File, onStage?: (stage: AnalysisStage) => void): Promise<AudioAnalysis> {
+  // STAGE 1 — decode (also covers sample peak + RMS, the cheap first pass).
+  onStage?.('decode');
+  await yieldToPaint();
   const ctx = new OfflineAudioContext(2, 1, 44100);
   const arrayBuf = await file.arrayBuffer();
   const decoded = await ctx.decodeAudioData(arrayBuf);
@@ -135,10 +147,16 @@ export async function analyzeAudio(file: File): Promise<AudioAnalysis> {
   const rms = Math.sqrt(sumSq / len);
   const rmsDb = 20 * Math.log10(rms || 1e-10);
 
+  // STAGE 2 — loudness (real LUFS, the K-weighting + gating pass).
+  onStage?.('loudness');
+  await yieldToPaint();
   // ---- Real LUFS (BS.1770-4): K-weight each channel, 400ms blocks @ 100ms hop,
   // channel-weighted mean square, two-stage gating (-70 abs, -10 rel) ----
   const lufsEstimate = computeIntegratedLufs(ch0, ch1, fs, decoded.numberOfChannels);
 
+  // STAGE 3 — true peak (4x oversampling) + phase correlation.
+  onStage?.('truepeak');
+  await yieldToPaint();
   // ---- Real true peak: 4x oversample via windowed-sinc, take max-abs ----
   const truePeakEstimate = computeTruePeak(ch0, ch1, len);
 
@@ -152,6 +170,9 @@ export async function analyzeAudio(file: File): Promise<AudioAnalysis> {
   const denom = Math.sqrt(sumL2 * sumR2);
   const phaseCorrelation = denom > 0 ? sumLR / denom : 1;
 
+  // STAGE 4 — spectrum (the FFT/Welch pass — "masking"/the #1 fix pick).
+  onStage?.('spectrum');
+  await yieldToPaint();
   // ---- Spectrum: real FFT, Welch power-averaging across the whole file,
   // then log (1/3-octave) binning of POWER ----
   const { spectrum, spectrumFreqs, lowEnergy, midEnergy, highEnergy, spectralTiltDbPerOct } =
