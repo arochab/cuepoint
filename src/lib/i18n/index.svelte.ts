@@ -32,7 +32,7 @@ const fr: Dict = {
   'nav.subtitle': 'Une oreille de studio, dans ton navigateur',
 
   // Home ("Silence" redesign: one invitation + one whisper, the whole screen is the door)
-  'home.invite': 'Dépose un bounce.',
+  'home.invite': 'Dépose ton son.',
   'home.whisper': 'Cue écoute, puis te dit la seule chose à corriger.',
   'home.dropNow': 'lâche-le',
   'home.knowAlready': 'je sais déjà',
@@ -103,7 +103,7 @@ const fr: Dict = {
   'fix.stepOf': 'sur',
   'fix.native': 'en natif Ableton',
   'fix.notes': 'les notes',
-  'fix.closing': 'Reprends ton bounce quand t’as fait ça.',
+  'fix.closing': 'Reprends ton son quand t’as fait ça.',
 
   // The 5 producer-voice needs (cold-entry chips) — validated by the jury
   'need.low-end': 'Mon kick et ma basse se battent',
@@ -117,7 +117,7 @@ const fr: Dict = {
   'cold.question': "C'est quoi qui te gêne ?",
   'cold.sub': 'Choisis ce que tu entends. Cue te donne la route, pas un catalogue.',
   'cold.characterFooter': 'ou explore le caractère · un seul son à la fois',
-  'cold.mustHear': 'ça, faut que je l’écoute — dépose le bounce.',
+  'cold.mustHear': 'ça, faut que je l’écoute — dépose ton son.',
   'cold.back': '← retour',
   // short need labels for the contents-page rows (the dot-leader version)
   'coldrow.low-end': 'le bas (kick & basse)',
@@ -134,7 +134,7 @@ const fr: Dict = {
   // Projects — memory timeline
   'projects.title': 'ce que t’as déjà entendu',
   'projects.keepIt': 'garder ça ? — connecte-toi.',
-  'projects.empty': 'rien encore. dépose un bounce.',
+  'projects.empty': 'rien encore. dépose ton son.',
   'projects.newProject': '+ nouveau',
 
   // "The move" titles per IssueType (recommendationFor) — FR
@@ -177,7 +177,7 @@ const en: Dict = {
   'nav.connected': 'Connected',
   'nav.subtitle': 'A studio ear, in your browser',
 
-  'home.invite': 'Drop a bounce.',
+  'home.invite': 'Drop your track.',
   'home.whisper': 'Cue listens, then tells you the one thing to fix.',
   'home.dropNow': 'let it go',
   'home.knowAlready': 'I already know',
@@ -235,7 +235,7 @@ const en: Dict = {
   'fix.stepOf': 'of',
   'fix.native': 'native Ableton',
   'fix.notes': 'the notes',
-  'fix.closing': 'Take your bounce back once you’ve done that.',
+  'fix.closing': 'Take your track back once you’ve done that.',
 
   'need.low-end': 'My kick and bass are fighting',
   'need.phase': 'Things vanish in mono',
@@ -247,7 +247,7 @@ const en: Dict = {
   'cold.question': 'What is bothering you?',
   'cold.sub': 'Pick what you hear. Cue hands you the route, not a catalog.',
   'cold.characterFooter': 'or explore character · one sound at a time',
-  'cold.mustHear': 'that one I have to hear — drop the bounce.',
+  'cold.mustHear': 'that one I have to hear — drop your track.',
   'cold.back': '← back',
   'coldrow.low-end': 'the low (kick & bass)',
   'coldrow.phase': 'the width (mono)',
@@ -262,7 +262,7 @@ const en: Dict = {
 
   'projects.title': 'what you have already heard',
   'projects.keepIt': 'keep this? — sign in.',
-  'projects.empty': 'nothing yet. drop a bounce.',
+  'projects.empty': 'nothing yet. drop your track.',
   'projects.newProject': '+ new',
 
   'move.headroom': 'A true-peak limiter',

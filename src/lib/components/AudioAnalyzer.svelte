@@ -45,6 +45,23 @@
   // Genre is asked ONCE, up front (chip row). Pre-selected from last time as a kindness.
   let genre = $state<GenreId | null>(lastGenre());
 
+  // HONEST droplet reactivity: a real loudness value [0..1] fed to <Cue energy>. During
+  // listening it climbs with real stage progress; on the verdict reveal it plays back the
+  // track's REAL RMS envelope once (a short "this is what Cue heard" pulse). Never random.
+  let liveEnergy = $state(0);
+  let envTimer: ReturnType<typeof setInterval> | undefined;
+  function playEnvelope(env: number[]) {
+    if (envTimer) clearInterval(envTimer);
+    if (!env?.length) return;
+    let i = 0;
+    const stepMs = Math.max(16, Math.round(1600 / env.length)); // ~1.6s sweep through the track
+    envTimer = setInterval(() => {
+      liveEnergy = env[i] ?? 0;
+      i++;
+      if (i >= env.length) { clearInterval(envTimer); envTimer = undefined; liveEnergy = 0; }
+    }, stepMs);
+  }
+
   let file = $state<File | null>(null);
   let result = $state<AudioAnalysis | null>(null);
   let loading = $state(false);
@@ -203,7 +220,7 @@
 
     // HONEST listening flow: each named stage ticks as its real DSP phase begins (onStage).
     // The progress hairline width = stageDone / total. No fake ceiling, no padding delay.
-    stageDone = 0; currentStage = null;
+    stageDone = 0; currentStage = null; liveEnergy = 0;
 
     try {
       const analysis = await analyzeAudio(next, (stage) => {
@@ -211,12 +228,16 @@
         currentStage = stage;
         // the stage index tells us how many are now in-flight/complete
         stageDone = ANALYSIS_STAGES.indexOf(stage);
+        // droplet energy climbs with REAL stage progress during listening (honest, not random)
+        liveEnergy = 0.25 + 0.6 * (stageDone / ANALYSIS_STAGES.length);
       });
       if (myRun !== fileGeneration) return;
       // The DSP is genuinely done — all stages complete.
       stageDone = ANALYSIS_STAGES.length;
 
       result = analysis;
+      // play the track's REAL loudness envelope once as the verdict appears
+      playEnvelope(analysis.envelope);
       const diag = computeDiagnostics(analysis);
       const m = scoreMix(analysis, genre);
       mix = m;
@@ -257,6 +278,8 @@
 
   // Reset to the upload screen.
   function analyzeAnother() {
+    if (envTimer) { clearInterval(envTimer); envTimer = undefined; }
+    liveEnergy = 0;
     file = null; result = null; mix = null; memory = null; error = ''; express = false;
     coachText = ''; showPacks = false; showMore = false; showShare = false;
     showFix = false; showMoreRoutes = false; expandedRoute = null; showCharacter = false; showCold = false;
@@ -407,7 +430,7 @@
 <div class="room" class:fix-mode={showFix}>
   {#if !showFix && !showCold && !showCharacter}
     <div class="room-cue" aria-hidden="true">
-      <Cue size={180} mood={loading ? 'listening' : (mix ? cueMood : 'idle')} interactive={false} autoRotate={true} />
+      <Cue size={240} mood={loading ? 'listening' : (mix ? cueMood : 'idle')} energy={liveEnergy} interactive={false} autoRotate={true} />
     </div>
   {/if}
 
@@ -607,7 +630,7 @@
   .room { position: relative; min-height: calc(100dvh - 64px); }
   .room-cue {
     position: absolute; left: 50%; top: 30%; transform: translate(-50%, -50%);
-    width: 180px; height: 180px; z-index: 1; pointer-events: none;
+    width: 240px; height: 240px; z-index: 1; pointer-events: none;
     transition: opacity .6s var(--ease-calm);
   }
 

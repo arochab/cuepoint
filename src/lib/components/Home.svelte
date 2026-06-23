@@ -38,7 +38,7 @@
   ondrop={onDrop}
 >
   <div class="home-cue" aria-hidden="true">
-    <Cue size={180} mood="idle" interactive={false} autoRotate={true} />
+    <Cue size={260} mood="idle" interactive={false} autoRotate={true} />
   </div>
 
   <div class="column">
@@ -73,7 +73,7 @@
   }
   .home-cue {
     position: absolute; left: 50%; top: 38%; transform: translate(-50%, -50%);
-    width: 180px; height: 180px; z-index: 1; pointer-events: none;
+    width: 260px; height: 260px; z-index: 1; pointer-events: none;
   }
   .invite {
     font-family: var(--font-serif); font-weight: 300;

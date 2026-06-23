@@ -12,8 +12,9 @@
     size = 0,                 // 0 = fill parent (full-bleed stage); >0 = fixed square px
     mood = 'idle' as Mood,
     interactive = false,
-    autoRotate = true
-  }: { size?: number; mood?: Mood; interactive?: boolean; autoRotate?: boolean } = $props();
+    autoRotate = true,
+    energy = 0                // REAL [0..1] audio envelope value (honest droplet reactivity)
+  }: { size?: number; mood?: Mood; interactive?: boolean; autoRotate?: boolean; energy?: number } = $props();
 
   // Map our verbs to Claude Design's verdict state machine.
   const MOOD_TO_VERDICT: Record<Mood, CueVerdict> = {
@@ -23,7 +24,7 @@
   let canvas: HTMLCanvasElement;
   // The Three.js engine (~1MB) is loaded ON DEMAND when Cue first mounts, so the initial
   // page stays light. Type is the module's return shape.
-  let api: { setVerdict: (v: CueVerdict) => void; dispose: () => void } | null = null;
+  let api: { setVerdict: (v: CueVerdict) => void; setEnergy?: (e: number) => void; dispose: () => void } | null = null;
   let failed = $state(false);
 
   // "Silence" reduced-motion path: skip WebGL entirely and render the static fallback dot
@@ -39,6 +40,10 @@
 
   $effect(() => {
     if (api) api.setVerdict(MOOD_TO_VERDICT[mood]);
+  });
+  // push the REAL audio envelope value into the scene (honest reactivity)
+  $effect(() => {
+    if (api?.setEnergy) api.setEnergy(energy);
   });
 
   onMount(() => {

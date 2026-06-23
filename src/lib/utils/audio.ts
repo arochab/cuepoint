@@ -13,6 +13,8 @@ export interface AudioAnalysis {
   midEnergy: number;         // dB, 250 Hz - 4 kHz
   highEnergy: number;        // dB, > 4 kHz
   spectralTiltDbPerOct: number; // slope of the spectrum; ~-3 to -4.5 is "balanced"
+  envelope: number[];        // REAL downsampled RMS loudness over the track, normalized 0..1
+                             // (drives the droplet's honest audio-reactive pulse — never random)
 }
 
 // ---------------------------------------------------------------------------
@@ -147,6 +149,25 @@ export async function analyzeAudio(file: File, onStage?: (stage: AnalysisStage) 
   const rms = Math.sqrt(sumSq / len);
   const rmsDb = 20 * Math.log10(rms || 1e-10);
 
+  // ---- REAL loudness envelope: ~96 RMS buckets across the whole track, normalized 0..1.
+  // This is the honest signal the droplet pulses to (no random). Computed in the cheap pass. ----
+  const BUCKETS = 96;
+  const envelope: number[] = new Array(BUCKETS).fill(0);
+  {
+    const per = Math.max(1, Math.floor(len / BUCKETS));
+    let maxv = 1e-9;
+    for (let b = 0; b < BUCKETS; b++) {
+      const s = b * per;
+      const e = Math.min(len, s + per);
+      let acc = 0;
+      for (let i = s; i < e; i++) { const m = (ch0[i] + ch1[i]) / 2; acc += m * m; }
+      const v = Math.sqrt(acc / Math.max(1, e - s));
+      envelope[b] = v;
+      if (v > maxv) maxv = v;
+    }
+    for (let b = 0; b < BUCKETS; b++) envelope[b] = envelope[b] / maxv; // normalize to peak
+  }
+
   // STAGE 2 — loudness (real LUFS, the K-weighting + gating pass).
   onStage?.('loudness');
   await yieldToPaint();
@@ -192,7 +213,8 @@ export async function analyzeAudio(file: File, onStage?: (stage: AnalysisStage) 
     lowEnergy: round1(lowEnergy),
     midEnergy: round1(midEnergy),
     highEnergy: round1(highEnergy),
-    spectralTiltDbPerOct: Math.round(spectralTiltDbPerOct * 100) / 100
+    spectralTiltDbPerOct: Math.round(spectralTiltDbPerOct * 100) / 100,
+    envelope
   };
 }
 
