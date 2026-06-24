@@ -50,7 +50,7 @@ CuePoint runs a real signal-analysis pass on your track — **no upload, no serv
 | **Headroom** | **4×-oversampled** Lanczos true peak (dBTP) — inter-sample, not sample peak* | [`audio.ts`](src/lib/utils/audio.ts) |
 | **Spectrum** | **Welch-averaged 1/3-octave** spectrum (Hann), **bandwidth-normalized**, on a hand-written **radix-2 FFT** | [`audio.ts`](src/lib/utils/audio.ts) |
 | **Balance** | **regression-fit** spectral tilt (white ≈ 0, pink ≈ −3 dB/oct, asserted in tests) | [`audio.ts`](src/lib/utils/audio.ts) |
-| **Phase** | whole-file **Pearson** correlation + a worst-400 ms-window scan (catches a section that collapses in mono) | [`audio.ts`](src/lib/utils/audio.ts) |
+| **Phase** | whole-file **Pearson** correlation + a worst-400 ms-window scan (catches a section that collapses in mono) — the exact `computePhaseCorrelation()` the tests assert | [`audio.ts`](src/lib/utils/audio.ts) |
 | **No bluff** | 6 issue types → 5 needs; recipes route off an explicit `recipe.need` field, no overlap scoring | [`needRoutes.ts`](src/lib/reco/needRoutes.ts) |
 
 <sub>* True peak uses 4× windowed-sinc oversampling — a practical approximation of BS.1770-4 Annex 2. It is sine-exact in tests and tuned not to false-clip hard-edged masters; it may read slightly under a spec-grade 8×/FIR meter on the very hottest material.</sub>

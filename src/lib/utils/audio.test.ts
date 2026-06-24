@@ -1,8 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { __dsp } from './audio.js';
 
-const { computeIntegratedLufs, computeTruePeak, computeSpectrum } = __dsp;
+const { computeIntegratedLufs, computeTruePeak, computeSpectrum, computePhaseCorrelation } = __dsp;
 const FS = 44100;
+// the tests call the REAL production phase DSP (exported via __dsp), not a copy — so a
+// regression in analyzeAudio's phase loop fails a test instead of passing CI green.
+const phase = (c0: Float32Array, c1: Float32Array) => computePhaseCorrelation(c0, c1, c0.length, FS);
 
 // ---- synthetic signal generators (deterministic, seeded noise) ----
 function sine(freq: number, amp: number, n: number): Float32Array {
@@ -65,22 +68,8 @@ function shapedNoise(slopeDbOct: number, n: number, seed = 1): Float32Array {
   for (let i = 0; i < n; i++) out[i] = (re[i] / mx) * 0.5;
   return out;
 }
-// whole-file + worst-window phase correlation (mirrors analyzeAudio)
-function phase(c0: Float32Array, c1: Float32Array) {
-  const len = c0.length;
-  let lr = 0, l2 = 0, r2 = 0;
-  for (let i = 0; i < len; i++) { lr += c0[i] * c1[i]; l2 += c0[i] * c0[i]; r2 += c1[i] * c1[i]; }
-  const whole = l2 * r2 > 0 ? lr / Math.sqrt(l2 * r2) : 1;
-  const wl = Math.round(0.4 * FS), wh = Math.round(0.1 * FS);
-  let min = whole;
-  for (let s = 0; s + wl <= len; s += wh) {
-    let a = 0, b = 0, c = 0;
-    for (let i = s; i < s + wl; i++) { a += c0[i] * c1[i]; b += c0[i] * c0[i]; c += c1[i] * c1[i]; }
-    const d = Math.sqrt(b * c); if (d < 1e-7) continue;
-    const v = a / d; if (v < min) min = v;
-  }
-  return { whole, min };
-}
+// (a comment that the in-test radix2/shapedNoise/rng are the SIGNAL GENERATORS — an
+// independent oracle — not the unit under test; production fft()/spectrum are what we assert.)
 
 describe('true peak (4x oversampled, BS.1770-4 style)', () => {
   it('reads ~0 dBTP for a full-scale 1 kHz sine', () => {
@@ -114,6 +103,27 @@ describe('LUFS (ITU-R BS.1770-4)', () => {
     const loud = computeIntegratedLufs(sine(1000, 1.0, FS * 2), sine(1000, 1.0, FS * 2), FS, 2);
     const quiet = computeIntegratedLufs(sine(1000, 0.5, FS * 2), sine(1000, 0.5, FS * 2), FS, 2);
     expect(loud - quiet).toBeCloseTo(6, 0);
+  });
+  // ABSOLUTE calibration anchor (EBU Tech 3341): a 1 kHz tone at -23 dBFS RMS, present in a
+  // SINGLE channel (the other silent, so there's no +3 dB dual-mono summation), must read
+  // ~-23.0 LUFS. The relative tests above can't catch an absolute-offset regression; this can.
+  it('a 1 kHz -23 dBFS tone in one channel reads -23.0 LUFS (±0.6 LU)', () => {
+    const amp = Math.pow(10, -23 / 20) * Math.SQRT2;   // -23 dBFS RMS for a sine -> peak amp
+    const tone = sine(1000, amp, FS * 3);
+    const silent = new Float32Array(FS * 3);
+    const lufs = computeIntegratedLufs(tone, silent, FS, 2);
+    expect(lufs).toBeGreaterThan(-23.6);
+    expect(lufs).toBeLessThan(-22.4);
+  });
+  // And the dual-mono +3 dB summation is real and correct: the SAME tone in BOTH channels
+  // reads ~3 LU louder. Pinning it documents the behavior so it can't silently drift.
+  it('the same tone in both channels reads ~3 LU louder (dual-mono summation, by spec)', () => {
+    const amp = Math.pow(10, -23 / 20) * Math.SQRT2;
+    const tone = sine(1000, amp, FS * 3);
+    const silent = new Float32Array(FS * 3);
+    const mono = computeIntegratedLufs(tone, silent, FS, 2);
+    const dual = computeIntegratedLufs(tone, tone, FS, 2);
+    expect(dual - mono).toBeCloseTo(3, 0);
   });
 });
 

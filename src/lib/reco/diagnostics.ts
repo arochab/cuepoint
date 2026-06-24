@@ -5,7 +5,6 @@
 // never contradict each other (the no-bluff invariant).
 
 import type { AudioAnalysis } from '../utils/audio.js';
-import { getRecommendations } from '../utils/audio.js';
 import type { IssueType } from './issueTypes.js';
 import type { Recipe } from '../types/index.js';
 import { genreById, type GenreId } from './genres.js';
@@ -18,7 +17,7 @@ export type Issue = {
 export type Diagnostics = {
   issues: Issue[]; verdict: string; safeForDemo: boolean;
   tonal: string; headroomState: string; monoState: string;
-  actionQueue: Issue[]; recs: string[]; suggestions: Recipe[];
+  actionQueue: Issue[]; suggestions: Recipe[];
 };
 
 export function computeDiagnostics(r: AudioAnalysis, genreId: GenreId | null): Diagnostics {
@@ -98,7 +97,6 @@ export function computeDiagnostics(r: AudioAnalysis, genreId: GenreId | null): D
   return {
     issues, verdict: '', safeForDemo, tonal, headroomState, monoState,
     actionQueue: issues.slice(0, 3),
-    recs: getRecommendations(r),
     suggestions: suggestionsForIssues(issues.map(i => i.type)),
   };
 }

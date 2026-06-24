@@ -430,13 +430,30 @@ begin
 end;
 $$;
 
--- PRIVILEGED ACCOUNTS: these 3 Google accounts get admin + unlimited credits (-1) the
--- moment they exist. Re-running is safe. Applies on signup too (see handle_new_user below).
+-- PRIVILEGED ACCOUNTS — config-driven, NO emails in source.
+-- The admin allowlist comes from the Postgres setting `app.admin_emails` (a comma-separated
+-- list) so this public schema ships zero personal data. Set it once per environment, e.g.
+--   alter database postgres set app.admin_emails = 'you@example.com,teammate@example.com';
+-- Helper: is a given email on the allowlist? (case-insensitive, trims spaces, never errors
+-- if the setting is unset — returns false.)
+create or replace function public.is_admin_email(p_email text)
+returns boolean
+language sql
+stable
+as $$
+  select p_email is not null and lower(p_email) = any (
+    select lower(trim(e))
+    from regexp_split_to_table(coalesce(current_setting('app.admin_emails', true), ''), ',') as e
+    where trim(e) <> ''
+  );
+$$;
+
+-- Promote any already-existing accounts that match the configured allowlist. Re-running is safe.
 update public.profiles
    set is_admin = true, credits = -1, plan = 'admin'
- where email in ('admin1@example.com', 'admin2@example.com', 'admin@example.com');
+ where public.is_admin_email(email);
 
--- Extend the signup trigger so a privileged email is auto-promoted on first sign-in.
+-- Extend the signup trigger so a configured email is auto-promoted on first sign-in.
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -444,12 +461,12 @@ security definer
 set search_path = ''
 as $$
 declare
-  v_is_admin boolean := new.email in ('admin1@example.com', 'admin2@example.com', 'admin@example.com');
+  v_is_admin boolean := public.is_admin_email(new.email);
 begin
   insert into public.profiles (id, email, display_name, is_admin, credits, plan)
   values (new.id, new.email, null, v_is_admin, case when v_is_admin then -1 else 0 end, case when v_is_admin then 'admin' else 'free' end)
   on conflict (id) do update set is_admin = excluded.is_admin
-    where public.profiles.email in ('admin1@example.com', 'admin2@example.com', 'admin@example.com');
+    where public.is_admin_email(public.profiles.email);
   return new;
 end;
 $$;

@@ -24,7 +24,7 @@ Keep the SPA rewrite as-is. This app routes purely in memory (`let route = $stat
    Apply both to **Production, Preview and Development**. They're `VITE_`-prefixed, so they're baked into the browser bundle at build time — public-safe, because access is gated by RLS.
 5. Click **Deploy**. Wait ~1–2 min. When it finishes you get a public URL — e.g. `https://<your-vercel-project>.vercel.app`. The app is fully usable here immediately — drop a track → get a verdict — even before auth is configured, because all DSP is local and an account is optional.
 6. **Copy the exact production origin** (e.g. `https://<your-vercel-project>.vercel.app`, **no trailing slash**). You'll paste it into Supabase next so sign-in works. If you skip this, analysis still works for everyone, but Google/email login will fail on the live site.
-7. **Put the live URL in the README.** Replace the `{{LIVE_URL}}` placeholder in `README.md` with your real production origin so the "Open the live app" link works.
+7. **Confirm the live URL in the README.** The README "Open the live app" links point at `https://cuepoint-mu.vercel.app`; if you forked to your own Vercel project, swap that origin for yours.
 8. Do the Supabase redirect config (below). Then hard-refresh the live site and run the verify checklist.
 
 ---

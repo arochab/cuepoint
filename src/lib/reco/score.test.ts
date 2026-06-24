@@ -44,10 +44,15 @@ describe('verdict — real defects still fail (no false pass)', () => {
   });
 });
 
-describe('verdict — score is bounded and monotonic-ish', () => {
-  it('score stays within 1..100', () => {
+describe('verdict — score is bounded and monotonic', () => {
+  it('score stays within 1..100 even for a worst-case master', () => {
     const m = scoreMix(mk({ truePeakEstimate: 5, lufsEstimate: 0, lowEnergy: -10, midEnergy: -60, highEnergy: -10, phaseCorrelation: -1 }), 'techno');
     expect(m.score).toBeGreaterThanOrEqual(1);
     expect(m.score).toBeLessThanOrEqual(100);
+  });
+  it('a clean master scores strictly higher than a clipping + mono-cancelling one', () => {
+    const clean = scoreMix(mk({ truePeakEstimate: -1.5, lufsEstimate: -8, phaseCorrelation: 0.8, phaseCorrelationMin: 0.7, lowEnergy: -30, midEnergy: -52, highEnergy: -67 }), 'techno');
+    const broken = scoreMix(mk({ truePeakEstimate: 3, lufsEstimate: 0, phaseCorrelation: -0.6, phaseCorrelationMin: -0.8 }), 'techno');
+    expect(clean.score).toBeGreaterThan(broken.score);
   });
 });
