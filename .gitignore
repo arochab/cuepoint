@@ -45,3 +45,8 @@ scripts/
 .claude/wf-*.js
 .tmp-dsp/
 CLAUDE.md
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
