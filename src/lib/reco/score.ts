@@ -41,9 +41,16 @@ export function scoreMix(a: AudioAnalysis, genreId: GenreId | null): MixScore {
   if (a.truePeakEstimate > -1) off += clamp((a.truePeakEstimate + 1) * 10, 0, 20);
   // Loudness vs the genre's release zone (gentle - quiet is fine for an unfinished mix).
   off += clamp(rangePenalty(a.lufsEstimate, g.lufs, 2.2), 0, 16);
-  // Tonal balance vs genre targets.
+  // Tonal balance vs genre targets — BOTH sides (a too-dull or too-thin master is a real
+  // fault, not just a too-bright/too-boomy one: rangePenalty is symmetric).
   off += clamp(rangePenalty(lowGap, g.lowGap, 3.2), 0, 22);
   off += clamp(rangePenalty(highGap, g.highGap, 3.0), 0, 16);
+  // Spectral tilt: the global slope. A balanced electronic master sits around -3..-6 dB/oct;
+  // steeper than -6 reads dark/lifeless, gentler than -1.5 reads bright/harsh. This is the
+  // signal the deficit "top-end is dull" card uses — read it here too so the verdict can't
+  // say SHIP while diagnostics shows a dull card. (Was measured in audio.ts but discarded.)
+  if (a.spectralTiltDbPerOct < -6) off += clamp((-6 - a.spectralTiltDbPerOct) * 6, 0, 14);
+  else if (a.spectralTiltDbPerOct > -1.5) off += clamp((a.spectralTiltDbPerOct + 1.5) * 6, 0, 12);
   // Phase: penalty scales smoothly with how negative the correlation is — no +8 cliff at
   // exactly 0, so a slightly-wide master (phase -0.05) barely loses points while real
   // cancellation (toward -1) is heavily penalized.

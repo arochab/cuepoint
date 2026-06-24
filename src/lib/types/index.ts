@@ -18,11 +18,13 @@ export interface Recipe {
   title: string;
   category: RecipeCategory;
   need: RecipeNeed;
-  goal: string;
+  // The fix-screen headline — bilingual, because it renders on the EN path too (the README
+  // promises the bilingual layer is real, not a stub). Select with recipeGoal(recipe).
+  goal: { fr: string; en: string };
   tags: string[];        // internal-only now: search/filter UI is deleted, kept for matching depth
   chain: RecipeStep[];
   ableton_notes: string;
-  native_alt: string;
+  native_alt: string;    // plugin/param strings — universal, not translated
 }
 
 export interface UserProfile {

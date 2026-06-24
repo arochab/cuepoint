@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { recipes } from '../data/recipes.js';
+  import { recipes, recipeGoal } from '../data/recipes.js';
   import type { Project } from '../types/index.js';
-  import { t } from '../i18n/index.svelte.js';
+  import { t, i18n } from '../i18n/index.svelte.js';
 
   let { recipeId, isFav, note, projects, projectRecipeMap, user, onBack, onNavigate, onToggleFav, onSaveNote, onAddToProject }: {
     recipeId: string;
@@ -41,7 +41,7 @@
 
     <!-- a scannable worklist, no card — alignment + silence do all the work -->
     <h1 class="rd-title reveal">{recipe.title}</h1>
-    <p class="rd-goal reveal" style="--i:1;">{recipe.goal}</p>
+    <p class="rd-goal reveal" style="--i:1;">{(i18n.locale, recipeGoal(recipe))}</p>
     <p class="rd-step-count rd-mono rd-ash reveal" style="--i:2;">{t('fix.stepCount')} 1 {t('fix.stepOf')} {recipe.chain.length}</p>
 
     <ol class="rd-worklist">

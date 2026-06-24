@@ -7,6 +7,7 @@
 import { type IssueType, TP_CEILING_DBTP, TP_CLIP_DBTP, PHASE_SECTION_CANCEL } from './issueTypes.js';
 import type { AudioAnalysis } from '../utils/audio.js';
 import type { MixScore } from './score.js';
+import { genreById, type GenreId } from './genres.js';
 import { i18n } from '../i18n/index.svelte.js';
 
 type Bi = { fr: string; en: string };
@@ -64,12 +65,21 @@ const PHASE_SECTION: Bi = {
   fr: 'Une section s’annule en mono — repère le passage le plus large et corrige sa polarité.',
   en: 'A section cancels in mono — find the widest passage and fix its polarity.',
 };
+// Deficit-side tonal copy (the no-bluff fix: too-dull / too-thin are real faults too).
+const TOP_DULL: Bi = {
+  fr: 'Le haut manque d’air — un shelf doux sur ce qui doit briller, pas un boost sur tout le mix.',
+  en: 'The top end lacks air — a gentle shelf on what should sparkle, not a boost across the mix.',
+};
+const LOW_THIN: Bi = {
+  fr: 'Le bas manque de corps — donne du poids au kick et à la basse vers 50-90 Hz avant le reste.',
+  en: 'The low end is thin — give the kick and bass body around 50-90 Hz before anything else.',
+};
 
 // The one-line summary. Pass the analysis + the verdict so headroom/phase branch on the
 // REAL state — the sentence can never contradict the verdict or the honesty receipt.
 // `verdict` is the score.ts tier ('ship' | 'almost' | 'work'); when the mix already SHIPs,
 // a hot true peak is a last-call note, not a "it will clip" condemnation.
-export function issueSummary(issue: IssueType, a?: AudioAnalysis, verdict?: string): string {
+export function issueSummary(issue: IssueType, a?: AudioAnalysis, verdict?: string, genreId?: GenreId | null): string {
   const loc = i18n.locale;
   if (a) {
     if (issue === 'headroom') {
@@ -85,6 +95,16 @@ export function issueSummary(issue: IssueType, a?: AudioAnalysis, verdict?: stri
       if (a.phaseCorrelation < 0) return PHASE_CANCEL[loc];
       if (a.phaseCorrelationMin < PHASE_SECTION_CANCEL) return PHASE_SECTION[loc];
       return SUMMARY.phase[loc];   // wide-but-positive
+    }
+    // Tonal cards are two-sided (mirrors diagnostics.ts): deficit copy when the band is
+    // BELOW its genre floor, excess copy (the default SUMMARY) when above. Same genre
+    // thresholds as the card, so the sentence and the card always point the same way.
+    const g = genreById(genreId);
+    if (issue === 'top-end' && (a.highEnergy - a.midEnergy) < g.highGap[0] - 2 && a.spectralTiltDbPerOct < -6) {
+      return TOP_DULL[loc];
+    }
+    if (issue === 'low-end' && (a.lowEnergy - a.midEnergy) < g.lowGap[0] - 2) {
+      return LOW_THIN[loc];
     }
   }
   return SUMMARY[issue][loc];

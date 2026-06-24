@@ -1,4 +1,10 @@
 import type { Recipe } from '../types/index.js';
+import { i18n } from '../i18n/index.svelte.js';
+
+// The fix-screen headline in the active locale — so the EN path is fully English end to end.
+export function recipeGoal(r: Recipe): string {
+  return r.goal[i18n.locale];
+}
 
 export const recipes: Recipe[] = [
   {
@@ -6,7 +12,7 @@ export const recipes: Recipe[] = [
     title: 'Electro Kick - Punch & Sub Control',
     category: 'mixing',
     need: 'low-end',
-    goal: 'Un kick serré et qui frappe, qui passe sur les gros systèmes sans devenir boueux',
+    goal: { fr: 'Un kick serré et qui frappe, qui passe sur les gros systèmes sans devenir boueux', en: 'A tight, punchy kick that translates on big systems without turning muddy' },
     tags: ['kick', 'low-end', 'electro', 'club'],
     chain: [
       { plugin: 'FabFilter Pro-Q 3', role: 'Surgical cleanup', params: 'HP at 25 Hz 24dB/oct, notch any boxiness 200-400 Hz (-3 dB narrow Q), shelf boost +1.5 dB at 3-5 kHz for click' },
@@ -22,7 +28,7 @@ export const recipes: Recipe[] = [
     title: 'Dark Analog Bass - Diva Growl',
     category: 'sound-design',
     need: 'character',
-    goal: 'Une bass line crade et mouvante avec une chaleur analogique pour l’electro underground',
+    goal: { fr: 'Une bass line crade et mouvante avec une chaleur analogique pour l’electro underground', en: 'A gritty, moving bassline with analog warmth for underground electro' },
     tags: ['bass', 'analog', 'diva', 'electro', 'underground'],
     chain: [
       { plugin: 'u-he Diva', role: 'Sound source', params: 'Patch: 2 OSC saw+square, Jup-8 filter model, Cutoff 40%, Reso 25%, Env 60%, VCA Decay 300ms, Mono+Glide 40ms' },
@@ -38,7 +44,7 @@ export const recipes: Recipe[] = [
     title: 'Crispy Hi-Hats Bus',
     category: 'mixing',
     need: 'top-end',
-    goal: 'Un bus de hi-hats cohérent et aéré qui passe devant sans devenir agressif',
+    goal: { fr: 'Un bus de hi-hats cohérent et aéré qui passe devant sans devenir agressif', en: 'A cohesive, airy hi-hat bus that cuts through without getting harsh' },
     tags: ['drums', 'hi-hats', 'bus', 'mixing'],
     chain: [
       { plugin: 'FabFilter Pro-Q 3', role: 'Clean low end', params: 'HP at 300 Hz 18dB/oct, gentle tilt +1 dB above 8 kHz' },
@@ -54,7 +60,7 @@ export const recipes: Recipe[] = [
     title: 'Vocal Chop - Glitchy & Hypnotic',
     category: 'sound-design',
     need: 'character',
-    goal: 'Créer des stabs vocaux rythmiques et texturés pour des morceaux electro/minimal',
+    goal: { fr: 'Créer des stabs vocaux rythmiques et texturés pour des morceaux electro/minimal', en: 'Build rhythmic, textured vocal stabs for electro / minimal tracks' },
     tags: ['vocals', 'creative', 'glitch', 'electro'],
     chain: [
       { plugin: 'Ableton Simpler', role: 'Slice & trigger', params: 'Mode: Slice, Sensitivity 50%, Map to keys, Warp ON' },
@@ -70,7 +76,7 @@ export const recipes: Recipe[] = [
     title: 'Stereo Width Master - Mastering Chain',
     category: 'mastering',
     need: 'phase',
-    goal: 'Un master large et ouvert qui reste mono-compatible quand tu vérifies',
+    goal: { fr: 'Un master large et ouvert qui reste mono-compatible quand tu vérifies', en: 'A wide, open master that still holds up when you check it in mono' },
     tags: ['mastering', 'stereo', 'width', 'final'],
     chain: [
       { plugin: 'iZotope Ozone 12 Equalizer', role: 'Tonal balance', params: 'Match EQ to reference, then tweak. Keep low end mono below 200 Hz' },
@@ -86,7 +92,7 @@ export const recipes: Recipe[] = [
     title: 'Parallel Drum Crush',
     category: 'mixing',
     need: 'top-end',
-    goal: 'Ajouter du poids et de l’agressivité aux drums sans perdre les transients',
+    goal: { fr: 'Ajouter du poids et de l’agressivité aux drums sans perdre les transients', en: 'Add weight and aggression to the drums without losing the transients' },
     tags: ['drums', 'parallel', 'crush', 'energy'],
     chain: [
       { plugin: 'D16 Redoptor 2', role: 'Tube saturation', params: 'Drive 50%, Bias 30%, Mix 100% (parallel bus)' },
@@ -102,7 +108,7 @@ export const recipes: Recipe[] = [
     title: 'CS-80 Blade Runner Pad',
     category: 'sound-design',
     need: 'character',
-    goal: 'Un pad analogique riche et évolutif avec du mouvement et de la profondeur',
+    goal: { fr: 'Un pad analogique riche et évolutif avec du mouvement et de la profondeur', en: 'A rich, evolving analog pad with movement and depth' },
     tags: ['pad', 'cs-80', 'ambient', 'atmosphere'],
     chain: [
       { plugin: 'Arturia CS-80 V4', role: 'Sound source', params: 'Layer 1: Saw, Layer 2: Square detuned +5ct, Ring Mod subtle 10%, Sub OSC on, Brilliance 60%, Resonance 20%' },
@@ -118,7 +124,7 @@ export const recipes: Recipe[] = [
     title: 'Sidechain Pump - Musical & Transparent',
     category: 'mixing',
     need: 'low-end',
-    goal: 'Un ducking sidechain propre qui respire avec le kick sans clics',
+    goal: { fr: 'Un ducking sidechain propre qui respire avec le kick sans clics', en: 'Clean sidechain ducking that breathes with the kick, no clicks' },
     tags: ['sidechain', 'kick', 'bass', 'groove', 'electro'],
     chain: [
       { plugin: 'Cableguys ShaperBox 3', role: 'Volume shaping', params: 'VolumeShaper: MIDI trigger from kick, Attack 5 ms, Hold 20 ms, Release 120 ms, Depth -12 to -18 dB, Curve smooth' },
@@ -132,7 +138,7 @@ export const recipes: Recipe[] = [
     title: 'Lo-Fi Texture Layer',
     category: 'sound-design',
     need: 'character',
-    goal: 'Ajouter une chaleur analogique et une texture nostalgique à n’importe quelle loop ou sample',
+    goal: { fr: 'Ajouter une chaleur analogique et une texture nostalgique à n’importe quelle loop ou sample', en: 'Add analog warmth and nostalgic texture to any loop or sample' },
     tags: ['lo-fi', 'texture', 'creative', 'vibe'],
     chain: [
       { plugin: 'Baby Audio Super VHS', role: 'VHS character', params: 'Body 60%, Wash 40%, Lo-fi 50%, Grit 30%, Mix 100%' },
@@ -148,7 +154,7 @@ export const recipes: Recipe[] = [
     title: 'Snare / Clap Snap & Body',
     category: 'mixing',
     need: 'top-end',
-    goal: 'Un snare/clap qui claque avec du corps et de la présence, sans mollesse',
+    goal: { fr: 'Un snare/clap qui claque avec du corps et de la présence, sans mollesse', en: 'A snare / clap that cracks with body and presence, never flabby' },
     tags: ['snare', 'clap', 'drums', 'transient'],
     chain: [
       { plugin: 'FabFilter Pro-Q 3', role: 'Shape fundamentals', params: 'HP 80 Hz, boost +3 dB at 200 Hz (body), +2 dB at 4-6 kHz (snap), notch any ring 500-800 Hz' },
@@ -164,7 +170,7 @@ export const recipes: Recipe[] = [
     title: 'Acid Line - Phoscyon Method',
     category: 'sound-design',
     need: 'character',
-    goal: 'Une acid bass authentique façon 303 avec du squelch et du mouvement',
+    goal: { fr: 'Une acid bass authentique façon 303 avec du squelch et du mouvement', en: 'An authentic 303-style acid bass with squelch and movement' },
     tags: ['acid', '303', 'bass', 'electro', 'classic'],
     chain: [
       { plugin: 'D16 Phoscyon 2', role: '303 emulation', params: 'Cutoff 40%, Resonance 70%, Env Mod 80%, Decay 55%, Accent ON for key notes, Slide on tied notes' },
@@ -180,7 +186,7 @@ export const recipes: Recipe[] = [
     title: 'Reverb Bus - Club Space',
     category: 'mixing',
     need: 'phase',
-    goal: 'Une colle spatiale cohérente pour le mix, comme si tout était dans la même pièce',
+    goal: { fr: 'Une colle spatiale cohérente pour le mix, comme si tout était dans la même pièce', en: 'Cohesive spatial glue for the mix, as if everything sat in one room' },
     tags: ['reverb', 'bus', 'space', 'mixing', 'club'],
     chain: [
       { plugin: 'FabFilter Pro-Q 3', role: 'Pre-reverb filter', params: 'HP 250 Hz, LP 8 kHz - keep mud and sizzle out of reverb input' },
@@ -195,7 +201,7 @@ export const recipes: Recipe[] = [
     title: 'Serum 2 Reese Bass',
     category: 'sound-design',
     need: 'character',
-    goal: 'Une bass massive et détunée avec un low end contrôlé pour un crossover DnB/electro',
+    goal: { fr: 'Une bass massive et détunée avec un low end contrôlé pour un crossover DnB/electro', en: 'A massive, detuned bass with controlled low end for a DnB / electro crossover' },
     tags: ['bass', 'reese', 'serum', 'sound-design'],
     chain: [
       { plugin: 'Xfer Serum 2', role: 'Source', params: 'OSC A: Saw, OSC B: Saw +7 Voices Detune 15%, Unison, Filter LP 24dB cutoff 60%, Reso 10%, LFO1 → Filter slow' },
@@ -211,7 +217,7 @@ export const recipes: Recipe[] = [
     title: 'Pre-Master Loudness Check',
     category: 'mastering',
     need: 'loudness',
-    goal: 'Un check final de loudness et de dynamique avant de livrer pour le mastering',
+    goal: { fr: 'Un check final de loudness et de dynamique avant de livrer pour le mastering', en: 'A final loudness and dynamics check before you hand off for mastering' },
     tags: ['mastering', 'loudness', 'LUFS', 'final'],
     chain: [
       { plugin: 'FabFilter Pro-Q 3', role: 'Last corrective EQ', params: 'Only surgical moves: fix resonances, check low-end mono (M/S mode), no broad boosts >2 dB' },
@@ -227,7 +233,7 @@ export const recipes: Recipe[] = [
     title: 'Roomy Top Loop Lift',
     category: 'mixing',
     need: 'top-end',
-    goal: 'Donner à une top loop plate un rendu plus large, plus aéré et plus haut de gamme sans devenir agressif.',
+    goal: { fr: 'Donner à une top loop plate un rendu plus large, plus aéré et plus haut de gamme sans devenir agressif.', en: 'Give a flat top loop a wider, airier, more high-end feel without getting harsh.' },
     tags: ['top-loop', 'air', 'width', 'mixing'],
     chain: [
       { plugin: 'FabFilter Pro-Q 3', role: 'Tilt and clean', params: 'HP 180 Hz, shelf +1.5 dB from 9 kHz, trim -2 dB at 3.5 kHz if splashy' },
@@ -242,7 +248,7 @@ export const recipes: Recipe[] = [
     title: 'Indie Dance Lead - Clean Pressure',
     category: 'sound-design',
     need: 'character',
-    goal: 'Un lead brillant mais contrôlé qui passe au-dessus des drums sans faire EDM cheap.',
+    goal: { fr: 'Un lead brillant mais contrôlé qui passe au-dessus des drums sans faire EDM cheap.', en: 'A bright but controlled lead that sits over the drums without sounding cheap-EDM.' },
     tags: ['lead', 'indie-dance', 'pressure', 'melodic'],
     chain: [
       { plugin: 'Arturia Mini V4', role: 'Core tone', params: '2 saw oscillators, slight detune, filter cutoff 55%, emphasis 20%, env amount 45%' },
@@ -257,7 +263,7 @@ export const recipes: Recipe[] = [
     title: 'Low-End Split - Bass + Kick Treaty',
     category: 'mixing',
     need: 'low-end',
-    goal: 'Faire coexister kick et bass sans masking permanent ni sidechain à outrance.',
+    goal: { fr: 'Faire coexister kick et bass sans masking permanent ni sidechain à outrance.', en: 'Let kick and bass coexist without constant masking or over-the-top sidechain.' },
     tags: ['low-end', 'kick', 'bass', 'translation'],
     chain: [
       { plugin: 'FabFilter Pro-Q 3', role: 'Dynamic carve', params: 'Dynamic bell on bass at kick fundamental, -2 to -4 dB, external sidechain from kick' },
@@ -272,7 +278,7 @@ export const recipes: Recipe[] = [
     title: 'Club Vocal Front - Dry Before Wet',
     category: 'mixing',
     need: 'top-end',
-    goal: 'Garder le vocal intelligible et devant avant d’ajouter le moindre traitement d’ambiance.',
+    goal: { fr: 'Garder le vocal intelligible et devant avant d’ajouter le moindre traitement d’ambiance.', en: 'Keep the vocal intelligible and up front before adding any ambience.' },
     tags: ['vocal', 'front', 'club', 'clarity'],
     chain: [
       { plugin: 'FabFilter Pro-Q 3', role: 'Subtract first', params: 'HP 90 Hz, broad dip -2 dB at 250 Hz, dynamic tame around 2.8-4 kHz if sharp' },
@@ -287,7 +293,7 @@ export const recipes: Recipe[] = [
     title: 'Master Cleanup - Last 5 Percent',
     category: 'mastering',
     need: 'loudness',
-    goal: 'Une chaîne finale tout en retenue pour les morceaux presque finis qui n’ont besoin que de discipline.',
+    goal: { fr: 'Une chaîne finale tout en retenue pour les morceaux presque finis qui n’ont besoin que de discipline.', en: 'A restrained final chain for almost-done tracks that just need discipline.' },
     tags: ['mastering', 'cleanup', 'restraint', 'final'],
     chain: [
       { plugin: 'FabFilter Pro-Q 3', role: 'Tiny corrective moves', params: 'Only 0.5-1.5 dB moves max; fix one resonance, one tilt issue, and leave the rest alone' },
@@ -302,7 +308,7 @@ export const recipes: Recipe[] = [
     title: 'Broken Machine Percussion',
     category: 'sound-design',
     need: 'character',
-    goal: 'Créer une couche percussive crade avec du mouvement pour les transitions electro et minimal.',
+    goal: { fr: 'Créer une couche percussive crade avec du mouvement pour les transitions electro et minimal.', en: 'Build a gritty percussive layer with movement for electro and minimal transitions.' },
     tags: ['perc', 'machine', 'grit', 'transition'],
     chain: [
       { plugin: 'Ableton Drum Rack', role: 'Source stack', params: 'Layer metallic one-shots, muted claps, and noise bursts across pads' },

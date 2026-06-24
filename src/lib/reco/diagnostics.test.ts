@@ -58,6 +58,33 @@ describe('computeDiagnostics — real defects still surface', () => {
   it('genuinely muddy low end raises a low-end card', () => {
     expect(types(mk({ lowEnergy: -10, midEnergy: -55, highEnergy: -70 }), 'techno')).toContain('low-end');
   });
+  // DEFICIT side — the no-bluff fix: a dull/thin master must NOT read "healthy"/SHIP.
+  it('a dull, dark master (lifeless top) raises a top-end card, not "healthy"', () => {
+    // highGap well under techno floor (-24) and globally dark (tilt steeper than -6)
+    const dull = mk({ lowEnergy: -30, midEnergy: -42, highEnergy: -72, spectralTiltDbPerOct: -8 });
+    const t = types(dull, 'techno');
+    expect(t).toContain('top-end');
+    expect(t).not.toContain('healthy');
+    expect(scoreMix(dull, 'techno').verdict).not.toBe('ship');   // verdict agrees with the card
+    const card = computeDiagnostics(dull, 'techno').issues.find((i) => i.type === 'top-end')!;
+    expect(card.title.toLowerCase()).toMatch(/dull/);             // deficit copy, not "bright"
+  });
+  it('a thin, weightless master raises a low-end (thin) card', () => {
+    // lowGap well under techno floor (10)
+    const thin = mk({ lowEnergy: -52, midEnergy: -50, highEnergy: -64, spectralTiltDbPerOct: -2 });
+    const t = types(thin, 'techno');
+    expect(t).toContain('low-end');
+    expect(t).not.toContain('healthy');
+    const card = computeDiagnostics(thin, 'techno').issues.find((i) => i.type === 'low-end')!;
+    expect(card.title.toLowerCase()).toMatch(/thin/);
+  });
+  it('the reference master shows NO deficit card (not flagged dull or thin)', () => {
+    for (const g of ['techno', 'other', 'deep-house', 'electro'] as const) {
+      const cards = computeDiagnostics(BAGATELLE, g).issues;
+      expect(cards.find((i) => i.title.toLowerCase().includes('dull')), `genre ${g}`).toBeUndefined();
+      expect(cards.find((i) => i.title.toLowerCase().includes('thin')), `genre ${g}`).toBeUndefined();
+    }
+  });
   it('the one thing is severity-ranked (a high beats a low)', () => {
     // hot-but-safe headroom (low) + a clipping... use a real high vs low: muddy low (medium) over loudness (low)
     const d = computeDiagnostics(mk({ truePeakEstimate: 1.5, lowEnergy: -10, midEnergy: -55, highEnergy: -70 }), 'techno');
@@ -115,5 +142,12 @@ describe('EN-locale copy is honest too', () => {
     expect(issueSummary('headroom', mk({ truePeakEstimate: 0.5 }), 'ship')).toMatch(/can clip/i);
     expect(issueSummary('phase', mk({ phaseCorrelation: -0.5, phaseCorrelationMin: -0.8 }))).toMatch(/cancel/i);
     expect(issueSummary('headroom', mk({ truePeakEstimate: -0.5 }), 'ship')).not.toMatch(/clip/i); // hot-but-safe
+  });
+  it('EN: tonal copy is two-sided — "lacks air" for dull, "thin" for weightless', () => {
+    setLocale('en');
+    const dull = mk({ lowEnergy: -30, midEnergy: -42, highEnergy: -72, spectralTiltDbPerOct: -8 });
+    expect(issueSummary('top-end', dull, 'almost', 'techno')).toMatch(/lacks air/i);
+    const thin = mk({ lowEnergy: -52, midEnergy: -50, highEnergy: -64 });
+    expect(issueSummary('low-end', thin, 'almost', 'techno')).toMatch(/thin/i);
   });
 });

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { analyzeAudio, ANALYSIS_STAGES, type AnalysisStage } from '../utils/audio.js';
   import { computeDiagnostics } from '../reco/diagnostics.js';
+  import { recipeGoal } from '../data/recipes.js';
   import type { AudioAnalysis } from '../utils/audio.js';
   import type { Recipe, Project, RecipeNeed } from '../types/index.js';
   import { issueSummary, honestyReceipt } from '../reco/issueText.js';
@@ -332,7 +333,7 @@
   // sentence under the verdict can never contradict the verdict or the honesty receipt.
   const oneThing = $derived.by(() => {
     if (!topFix || !result) return '';
-    return (i18n.locale, issueSummary(topFix.type as IssueType, result, mix?.verdict));
+    return (i18n.locale, issueSummary(topFix.type as IssueType, result, mix?.verdict, genre));
   });
 
   // The honesty receipt: one line of what Cue actually heard, under the verdict.
@@ -454,7 +455,7 @@
       <p class="ash small">{verdictWord} — {moveTitle}</p>
       <div class="horizon" style="margin:14px 0 28px;"></div>
       {#if topRoute}
-        <p class="goal reveal">{topRoute.goal}</p>
+        <p class="goal reveal">{(i18n.locale, recipeGoal(topRoute))}</p>
         <p class="ash mono small reveal" style="--i:1;">{t('fix.stepCount')} 1 {t('fix.stepOf')} {topRoute.chain.length}</p>
         <ol class="worklist">
           {#each topRoute.chain as step, i}
@@ -483,7 +484,7 @@
             {#each extraRoutes as r (r.id)}
               <button class="alt-route reveal" onclick={() => onOpenRecipe?.(r.id)}>
                 <span class="work-plugin">{r.title}</span>
-                <span class="ash small">{r.goal}</span>
+                <span class="ash small">{(i18n.locale, recipeGoal(r))}</span>
               </button>
             {/each}
           {/if}
@@ -541,7 +542,7 @@
           <li class="char-row reveal" style="--i:{i};">
             <button class="content-link" onclick={() => onOpenRecipe?.(r.id)}>
               <span class="work-plugin">{r.title}</span>
-              <span class="ash small">{r.goal}</span>
+              <span class="ash small">{(i18n.locale, recipeGoal(r))}</span>
             </button>
           </li>
         {/each}
