@@ -57,18 +57,19 @@ export function scoreMix(a: AudioAnalysis, genreId: GenreId | null): MixScore {
   // Tonal balance vs genre targets.
   off += clamp(rangePenalty(lowGap, g.lowGap, 3.2), 0, 22);
   off += clamp(rangePenalty(highGap, g.highGap, 3.0), 0, 16);
-  // Phase: real mono cancellation hurts; merely wide does not.
-  if (a.phaseCorrelation < 0) off += clamp((-a.phaseCorrelation) * 30 + 8, 8, 22);
+  // Phase: penalty scales smoothly with how negative the correlation is — no +8 cliff at
+  // exactly 0, so a slightly-wide master (phase -0.05) barely loses points while real
+  // cancellation (toward -1) is heavily penalized.
+  if (a.phaseCorrelation < 0) off += clamp((-a.phaseCorrelation) * 40, 0, 22);
 
   const score = Math.round(clamp(100 - off, 1, 100));
 
   // --- verdict bands ---
   // A hard fault is an INSTANT worst-tier ("NOT YET"), bypassing the score. Only genuine
-  // defects qualify: real mono cancellation (phase < 0) or a grossly clipping export
-  // (> 2 dBTP). A true peak of -1..+2 is a hot-but-intentional master — it loses points
-  // above and is flagged in the receipt, but is NOT auto-condemned. (Before, any TP > -1
-  // forced NOT YET, so every loud club/techno master failed regardless of quality.)
-  const hardFault = a.phaseCorrelation < 0 || a.truePeakEstimate > 2.0;
+  // defects qualify: real mono cancellation (phase < -0.1, not a hair below 0) or a grossly
+  // clipping export (> 2 dBTP). A true peak of -1..+2 is a hot-but-intentional master — it
+  // loses points and is flagged in the receipt, but is NOT auto-condemned.
+  const hardFault = a.phaseCorrelation < -0.1 || a.truePeakEstimate > 2.0;
   let verdict: Verdict;
   if (hardFault || score < 55) verdict = 'work';
   else if (score < 80) verdict = 'almost';

@@ -10,7 +10,7 @@
   import { serverProvider, setCoachAnalysisId } from '../coach/serverProvider.js';
   import type { IssueType } from '../reco/issueTypes.js';
   import { recordAnalysis, compareToLast, type AnalysisRecord, type MemoryReadout } from '../progress/history.js';
-  import { GENRES, lastGenre, rememberGenre, type GenreId } from '../reco/genres.js';
+  import { GENRES, genreById, lastGenre, rememberGenre, type GenreId } from '../reco/genres.js';
   import { scoreMix, type MixScore } from '../reco/score.js';
   // Deterministic need→route bridge (replaces brittle tag-overlap scoring). Cue can
   // only ever hand over a route the DSP supports — see needRoutes.ts.
@@ -238,7 +238,7 @@
       result = analysis;
       // play the track's REAL loudness envelope once as the verdict appears
       playEnvelope(analysis.envelope);
-      const diag = computeDiagnostics(analysis);
+      const diag = computeDiagnostics(analysis, genre);
       const m = scoreMix(analysis, genre);
       mix = m;
 
@@ -323,10 +323,22 @@
     return suggestionsForIssues(issues.map(i => i.type));
   }
 
-  function computeDiagnostics(r: AudioAnalysis): Diagnostics {
+  // Genre-aware so a fix card can never contradict the verdict: score.ts judges the
+  // low/high gaps and loudness PER GENRE, so the issue detector must use the same
+  // genre target zones (genreById) instead of fixed literals. Otherwise a SHIP master
+  // (e.g. a balanced -4.5 dB/oct techno track, lowGap ~21 inside techno [10,38])
+  // would still print a "fix the bass" card.
+  function computeDiagnostics(r: AudioAnalysis, genreId: GenreId | null): Diagnostics {
+    const g = genreById(genreId);
     const issues: Issue[] = [];
     const headroom = r.truePeakEstimate, loudness = r.lufsEstimate, phase = r.phaseCorrelation;
+    const phaseMin = r.phaseCorrelationMin;   // worst 400ms window — catches a section that collapses
     const low = r.lowEnergy, mid = r.midEnergy, high = r.highEnergy;
+    const lowGap = low - mid, highGap = high - mid;
+    // A section genuinely cancels in mono even though the whole-file reads safe. Threshold
+    // -0.25 (not just <0) so a momentary -0.07 window — normal stereo movement — is NOT
+    // flagged; only a real polarity/anti-phase section (well negative) raises it.
+    const sectionCancels = phaseMin < -0.25 && phase >= 0;
 
     if (headroom > -1) issues.push({
       type: 'headroom', title: 'True peak is over the ceiling', severity: 'high',
@@ -335,32 +347,35 @@
       expert: 'Back off the final limiter and compare kick / snare crest before adding any extra loudness push.',
       ignore: 'Do not chase more loudness until this is under control.'
     });
-    if (phase < 0 || phase < 0.2) issues.push({
-      type: 'phase', title: phase < 0 ? 'Mono cancellation detected' : 'Very wide, check mono', severity: phase < 0 ? 'high' : 'low',
+    if (phase < 0.2 || sectionCancels) issues.push({
+      type: 'phase',
+      title: phase < 0 ? 'Mono cancellation detected' : sectionCancels ? 'A section cancels in mono' : 'Very wide, check mono',
+      severity: (phase < 0 || sectionCancels) ? 'high' : 'low',
       summary: phase < 0 ? `Correlation is ${r.phaseCorrelation} - below 0 means layers cancel when folded to mono.`
+        : sectionCancels ? `Overall correlation is ${r.phaseCorrelation}, but a section drops to ${r.phaseCorrelationMin} - part of the track cancels in mono.`
         : `Correlation is ${r.phaseCorrelation} - a wide image is fine, just confirm the low end survives a mono fold.`,
       beginner: 'Check the low end and wide verbs in mono before doing anything else.',
-      expert: phase < 0 ? 'Find the inverted/polarity-flipped layer; a mono-maker only masks it. Then narrow below 150-200 Hz.'
+      expert: (phase < 0 || sectionCancels) ? 'Find the inverted/polarity-flipped layer (check the worst section); a mono-maker only masks it. Then narrow below 150-200 Hz.'
         : 'Spot-check decorrelated reverbs and chorus returns, and keep below 150-200 Hz mono.',
       ignore: 'Do not add more width until the center feels stable.'
     });
-    if (high > mid + 3) issues.push({
+    if (highGap > g.highGap[1] + 2) issues.push({
       type: 'top-end', title: 'Top-end reads bright', severity: 'medium',
-      summary: `Highs sit about ${Math.round(high - mid)} dB over the mids - can feel crisp at first but brittle on long listens.`,
+      summary: `Highs sit about ${Math.round(highGap)} dB over the mids - bright for ${g.label}, can feel brittle on long listens.`,
       beginner: 'Try a subtle shelf on hats or air elements instead of boosting the whole mix.',
       expert: 'Review cymbal transient shape and upper-mid congestion before adding pure air.',
       ignore: 'Do not fix this with a broad smile EQ on the master.'
     });
-    if (low > mid + 4) issues.push({
+    if (lowGap > g.lowGap[1] + 2) issues.push({
       type: 'low-end', title: 'Low end dominates the mids', severity: 'medium',
-      summary: `Low band sits about ${Math.round(low - mid)} dB over the mids - kick and bass will read oversized on full-range systems.`,
+      summary: `Low band sits about ${Math.round(lowGap)} dB over the mids - heavy even for ${g.label}; kick and bass will read oversized on full-range systems.`,
       beginner: 'A/B on small speakers and lower either kick sub or bass sub by 1-2 dB.',
       expert: 'Separate ownership between 45-65 Hz and 80-110 Hz instead of compressing everything harder.',
       ignore: 'Do not widen the low end to make it feel "bigger".'
     });
-    if (loudness < -16) issues.push({
+    if (loudness < g.lufs[0] - 2) issues.push({
       type: 'loudness', title: 'Reads quiet next to references', severity: 'low',
-      summary: `At ${r.lufsEstimate} LUFS this bounce is on the quiet side - fine if the mix is unfinished.`,
+      summary: `At ${r.lufsEstimate} LUFS this is quiet for ${g.label} - fine if the mix is unfinished.`,
       beginner: 'Leave it for now if the mix is unfinished. Revisit loudness last.',
       expert: 'Only push once the tonal and headroom problems are solved.',
       ignore: 'Do not chase a LUFS number before the track is balanced.'
@@ -381,7 +396,8 @@
       actionQueue: issues.slice(0, 3), recs: getRecommendations(r), suggestions: suggestRecipes(issues) };
   }
 
-  const diagnostics = $derived(result ? computeDiagnostics(result) : null);
+  // genre is reactive (the producer can correct it post-verdict) so diagnostics re-derive
+  const diagnostics = $derived(result ? computeDiagnostics(result, genre) : null);
   const topFix = $derived(diagnostics?.actionQueue[0] ?? null);
 
   // Map the real DSP verdict to the three-answer system + exact brand colours.

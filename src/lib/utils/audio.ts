@@ -7,6 +7,7 @@ export interface AudioAnalysis {
   lufsEstimate: number;      // real BS.1770-4 integrated LUFS (K-weighted, gated)
   truePeakEstimate: number;  // real 4x-oversampled true peak (dBTP)
   phaseCorrelation: number;
+  phaseCorrelationMin: number; // worst 400ms-window correlation (catches a section that collapses in mono)
   spectrum: number[];        // ~1/3-octave band levels in dB (log-spaced)
   spectrumFreqs: number[];   // center frequency (Hz) of each spectrum band
   lowEnergy: number;         // dB, < 250 Hz
@@ -191,6 +192,23 @@ export async function analyzeAudio(file: File, onStage?: (stage: AnalysisStage) 
   const denom = Math.sqrt(sumL2 * sumR2);
   const phaseCorrelation = denom > 0 ? sumLR / denom : 1;
 
+  // ---- WORST-window correlation (mono-safety per section) ----
+  // A whole-file number can read safe (+0.9) while one section collapses in mono. We scan
+  // 400ms windows @100ms hop and keep the MINIMUM correlation, so a mono-incompatible
+  // chorus/drop is caught. Only windows with real energy count (silence -> skip).
+  const winLen = Math.round(0.4 * fs), winHop = Math.round(0.1 * fs);
+  let phaseMin = phaseCorrelation;
+  if (len >= winLen) {
+    for (let start = 0; start + winLen <= len; start += winHop) {
+      let lr = 0, l2 = 0, r2 = 0;
+      for (let i = start; i < start + winLen; i++) { lr += ch0[i] * ch1[i]; l2 += ch0[i] * ch0[i]; r2 += ch1[i] * ch1[i]; }
+      const d = Math.sqrt(l2 * r2);
+      if (d < 1e-7) continue;                 // near-silent window: ignore
+      const c = lr / d;
+      if (c < phaseMin) phaseMin = c;
+    }
+  }
+
   // STAGE 4 — spectrum (the FFT/Welch pass — "masking"/the #1 fix pick).
   onStage?.('spectrum');
   await yieldToPaint();
@@ -208,6 +226,7 @@ export async function analyzeAudio(file: File, onStage?: (stage: AnalysisStage) 
     lufsEstimate: round1(lufsEstimate),
     truePeakEstimate: round1(truePeakEstimate),
     phaseCorrelation: Math.round(phaseCorrelation * 100) / 100,
+    phaseCorrelationMin: Math.round(phaseMin * 100) / 100,
     spectrum,
     spectrumFreqs,
     lowEnergy: round1(lowEnergy),
@@ -266,14 +285,17 @@ function computeTruePeak(ch0: Float32Array, ch1: Float32Array, len: number): num
   let tp = 0;
   const evalChannel = (ch: Float32Array) => {
     for (let i = 0; i < len; i++) {
-      // sub-sample positions between i and i+1
-      for (let s = 0; s < OS; s++) {
+      // The integer (real) sample peak is always counted.
+      const a0 = Math.abs(ch[i]);
+      if (a0 > tp) tp = a0;
+      // Inter-sample (fractional) positions need the FULL Lanczos kernel. Near the edges
+      // the kernel would be truncated (some taps fall outside the buffer), which the old
+      // `continue` silently allowed — inflating the result by up to ~+1.08 dB on a hard-
+      // edged full-scale master (a false clip). Skip fractional eval in the edge margin;
+      // the integer peaks above still cover those samples.
+      if (i < TAPS || i >= len - TAPS) continue;
+      for (let s = 1; s < OS; s++) {
         const frac = s / OS;
-        if (s === 0) {
-          const a = Math.abs(ch[i]);
-          if (a > tp) tp = a;
-          continue;
-        }
         let acc = 0;
         for (let t = -TAPS + 1; t <= TAPS; t++) {
           const idx = i + t;
