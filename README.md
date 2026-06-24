@@ -22,11 +22,13 @@
 </p>
 
 <p align="center">
-  <img src="assets/demo.gif" alt="Cue — the living, audio-reactive droplet" width="470">
+  <img src="assets/demo.gif" alt="Cue — the living, audio-reactive droplet listening to a track" width="440">
 </p>
 
 <p align="center">
-  <img src="assets/readme-triptych.svg" alt="CuePoint — drop your track, Cue listens, Cue gives one fix" width="100%">
+  <img src="assets/shot-verdict-presque.png" alt="Verdict: PRESQUE — one fix and the honesty receipt" width="46%">
+  &nbsp;
+  <img src="assets/shot-verdict-pasencore.png" alt="Verdict: PAS ENCORE — true peak over the ceiling" width="46%">
 </p>
 
 Every producer knows the moment: the track is *almost* there, something is off, and you don't know what. So you open ten tabs, push faders at random, and lose the thread. CuePoint refuses to add to that noise. You drop a track, a real DSP runs entirely in your browser — BS.1770-4 integrated LUFS, a 4×-oversampled true peak, phase correlation, a full FFT spectrum and its tilt — and Cue tells you the **one** thing to fix first, in the voice of a producer who's been there, then hands you the exact plugin chain. The hard truth baked into the whole thing: **Cue never bluffs.** The engine genuinely hears five things, those map to five producer needs, and a recipe is only ever offered when the measurement actually supports it — the routing is structural, not a vibe. Under the verdict sits an "honesty receipt" that shows you the raw numbers Cue heard. And because all the DSP is client-side (`OfflineAudioContext`), your unreleased music never touches a server. Free. French by default — it's built for a French producer first — with an EN toggle.
@@ -55,7 +57,7 @@ Every producer knows the moment: the track is *almost* there, something is off, 
 </table>
 
 <p align="center">
-  <img src="assets/ig-post.svg" alt="CuePoint verdict — one fix, and the honesty receipt" width="58%">
+  <img src="assets/shot-verdict-presque.png" alt="CuePoint verdict — one fix, and the honesty receipt" width="56%">
 </p>
 
 ## How it works
