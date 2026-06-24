@@ -6,7 +6,6 @@
   import { issueSummary, honestyReceipt } from '../reco/issueText.js';
   import { addProjectComment, saveAnalysis, getCredits, startCheckout } from '../utils/db.js';
   import Cue from './Cue.svelte';
-  import ShareCard from './ShareCard.svelte';
   import { rulesProvider } from '../coach/rulesProvider.js';
   import { serverProvider, setCoachAnalysisId } from '../coach/serverProvider.js';
   import type { IssueType } from '../reco/issueTypes.js';
@@ -91,7 +90,6 @@
   // into a single quiet "More" reveal (the jury killed the score hero + stat tiles + the
   // evidence grid from the default path). showFix drives Path A — The Continuation.
   let showMore = $state(false);     // single fold: score whisper + stats + evidence
-  let showShare = $state(false);
   let showFix = $state(false);      // Path A: the fix is the next sentence after the verdict
   let showMoreRoutes = $state(false); // reveal suggestions[1..2]
   let expandedRoute = $state<string | null>(null); // inline-expand a route's steps
@@ -213,7 +211,7 @@
     file = next;
     loading = true;
     result = null; mix = null; memory = null; error = '';
-    showMore = false; showShare = false; showFix = false; showMoreRoutes = false;
+    showMore = false; showFix = false; showMoreRoutes = false;
     expandedRoute = null; showCharacter = false; showCold = false;
     selectedProjectId = ''; snapshotSaved = false; snapshotError = '';
     coachText = ''; coachBusy = false; coachStage = '';
@@ -282,7 +280,7 @@
     if (envTimer) { clearInterval(envTimer); envTimer = undefined; }
     liveEnergy = 0;
     file = null; result = null; mix = null; memory = null; error = ''; express = false;
-    coachText = ''; showPacks = false; showMore = false; showShare = false;
+    coachText = ''; showPacks = false; showMore = false;
     showFix = false; showMoreRoutes = false; expandedRoute = null; showCharacter = false; showCold = false;
   }
 
@@ -550,10 +548,6 @@
       </ol>
       <button class="link ash" style="margin-top:32px;" onclick={() => showCharacter = false}>{t('cold.back')}</button>
     </div>
-  {/if}
-
-  {#if showShare && mix}
-    <div class="column"><ShareCard {mix} {genre} fileName={file?.name ?? 'my track'} /></div>
   {/if}
 </div>
 

@@ -1,8 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { computeDiagnostics } from './diagnostics.js';
 import { issueSummary } from './issueText.js';
 import { scoreMix } from './score.js';
+import { setLocale } from '../i18n/index.svelte.js';
 import type { AudioAnalysis } from '../utils/audio.js';
+
+afterEach(() => setLocale('fr'));   // restore the default locale between tests
 
 function mk(p: Partial<AudioAnalysis>): AudioAnalysis {
   return {
@@ -100,5 +103,17 @@ describe('the no-bluff invariant — headroom sentence, card and verdict never d
   });
   it('a real cancellation DOES say parts cancel', () => {
     expect(issueSummary('phase', mk({ phaseCorrelation: -0.5, phaseCorrelationMin: -0.8 })).toLowerCase()).toMatch(/cancel|s’annulent|s'annulent/);
+  });
+});
+
+// The verdict screen is the screenshot moment — EN copy must be exercised too, not just FR,
+// so an EN-string drift on "will clip" / "cancel" can't regress with CI green (jury nit).
+describe('EN-locale copy is honest too', () => {
+  it('EN: a hard clipper says "will clip"; a 0..+1 peak says "can clip"; a cancellation says "cancel"', () => {
+    setLocale('en');
+    expect(issueSummary('headroom', mk({ truePeakEstimate: 3 }), 'work')).toMatch(/will clip/i);
+    expect(issueSummary('headroom', mk({ truePeakEstimate: 0.5 }), 'ship')).toMatch(/can clip/i);
+    expect(issueSummary('phase', mk({ phaseCorrelation: -0.5, phaseCorrelationMin: -0.8 }))).toMatch(/cancel/i);
+    expect(issueSummary('headroom', mk({ truePeakEstimate: -0.5 }), 'ship')).not.toMatch(/clip/i); // hot-but-safe
   });
 });

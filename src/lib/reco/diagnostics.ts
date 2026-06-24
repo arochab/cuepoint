@@ -15,8 +15,7 @@ export type Issue = {
   summary: string; beginner: string; expert: string; ignore: string;
 };
 export type Diagnostics = {
-  issues: Issue[]; verdict: string; safeForDemo: boolean;
-  tonal: string; headroomState: string; monoState: string;
+  issues: Issue[]; safeForDemo: boolean;
   actionQueue: Issue[]; suggestions: Recipe[];
 };
 
@@ -96,11 +95,8 @@ export function computeDiagnostics(r: AudioAnalysis, genreId: GenreId | null): D
   issues.sort((a, b) => rank[a.severity] - rank[b.severity]);
 
   const safeForDemo = issues.every(i => i.severity !== 'high');
-  const tonal = low > high + 5 ? 'Bottom-heavy tilt' : high > low + 5 ? 'Air-heavy tilt' : 'Balanced broad tilt';
-  const headroomState = headroom > TP_CLIP_DBTP ? 'Clipping' : headroom > TP_CEILING_DBTP ? 'Over the ceiling' : headroom > -1 ? 'A touch hot' : headroom > -1.5 ? 'Tight' : 'Comfortable';
-  const monoState = phase < 0 ? 'Unsafe in mono' : (phase < 0.2 || sectionCancels) ? 'Monitor in mono' : 'Stable enough';
   return {
-    issues, verdict: '', safeForDemo, tonal, headroomState, monoState,
+    issues, safeForDemo,
     actionQueue: issues.slice(0, 3),
     suggestions: suggestionsForIssues(issues.map(i => i.type)),
   };

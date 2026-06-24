@@ -90,23 +90,6 @@ export function issueSummary(issue: IssueType, a?: AudioAnalysis, verdict?: stri
   return SUMMARY[issue][loc];
 }
 
-// FR/EN for the three human readings (mirror score.ts, localized).
-const LOUD: Record<string, Bi> = {
-  loud:  { fr: 'plus fort que ce style demande', en: 'louder than this style needs' },
-  quiet: { fr: 'faible à côté des sorties', en: 'quiet next to released tracks' },
-  ok:    { fr: 'calé pour le streaming', en: 'sits right for streaming' },
-};
-const TP: Record<string, Bi> = {
-  clip: { fr: 'risque de clip après conversion', en: 'clipping risk after conversion' },
-  hot:  { fr: 'un poil chaud', en: 'a touch hot' },
-  safe: { fr: 'marge saine', en: 'safe headroom' },
-};
-const MONO: Record<string, Bi> = {
-  cancel: { fr: 'des éléments s’annulent en mono', en: 'parts cancel in mono' },
-  wide:   { fr: 'très large, vérifie au casque', en: 'very wide, check on phones' },
-  safe:   { fr: 'tient sur un haut-parleur de tél', en: 'plays safe on phone speakers' },
-};
-
 // The honesty receipt: one Ash line under the verdict that makes "no bluff" visible —
 // what Cue actually heard, built from real measurements. e.g.
 //   FR: "entendu : bas +6 dB · phase ok · pic -0.4 dB"

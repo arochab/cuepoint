@@ -12,25 +12,11 @@ import { TP_CLIP_DBTP, PHASE_SECTION_CANCEL } from './issueTypes.js';
 export type Verdict = 'ship' | 'almost' | 'work';
 export type FaceMood = 'happy' | 'thinking' | 'worried';
 
-export interface BandRead {
-  key: 'low' | 'mid' | 'high';
-  label: string;       // "Mud & weight", "Body", "Air & sparkle"
-  state: 'low' | 'ok' | 'high';
-  human: string;       // one-line consequence in plain words
-}
-
 export interface MixScore {
   score: number;            // 0..100
   verdict: Verdict;
   verdictWord: string;      // "SHIP IT" / "ALMOST" / "NEEDS WORK"
   face: FaceMood;
-  // the three translated headline stats (consequence, not raw number)
-  loudnessHuman: string;
-  truePeakHuman: string;
-  monoHuman: string;
-  bands: BandRead[];
-  // which band is the problem to lean toward: -1 low, 0 mid, +1 high
-  lean: number;
 }
 
 function clamp(n: number, lo: number, hi: number) { return Math.max(lo, Math.min(hi, n)); }
@@ -86,43 +72,8 @@ export function scoreMix(a: AudioAnalysis, genreId: GenreId | null): MixScore {
   const verdictWord = verdict === 'ship' ? 'SHIP IT' : verdict === 'almost' ? 'ALMOST' : 'NEEDS WORK';
   const face: FaceMood = verdict === 'ship' ? 'happy' : verdict === 'almost' ? 'thinking' : 'worried';
 
-  // --- translated headline stats ---
-  const lufsLo = g.lufs[0], lufsHi = g.lufs[1];
-  const loudnessHuman =
-    a.lufsEstimate > lufsHi + 1 ? 'louder than this style needs'
-    : a.lufsEstimate < lufsLo - 2 ? 'quiet next to released tracks'
-    : 'sits right for streaming';
-  const truePeakHuman =
-    a.truePeakEstimate > -1 ? 'clipping risk after conversion'
-    : a.truePeakEstimate > -1.5 ? 'a touch hot' : 'safe headroom';
-  const monoHuman =
-    a.phaseCorrelation < 0 ? 'parts cancel in mono'
-    : a.phaseCorrelation < 0.2 ? 'very wide, check on phones' : 'plays safe on phone speakers';
-
-  // --- per-band read ---
-  const lowState = lowGap > g.lowGap[1] ? 'high' : lowGap < g.lowGap[0] ? 'low' : 'ok';
-  const highState = highGap > g.highGap[1] ? 'high' : highGap < g.highGap[0] ? 'low' : 'ok';
-  const bands: BandRead[] = [
-    {
-      key: 'low', label: 'Mud & weight', state: lowState as BandRead['state'],
-      human: lowState === 'high' ? 'low end is sitting on everything else'
-        : lowState === 'low' ? 'could use more weight down low' : 'low end is in its lane'
-    },
-    {
-      key: 'mid', label: 'Body', state: 'ok',
-      human: 'mids carry the track, looking steady'
-    },
-    {
-      key: 'high', label: 'Air & sparkle', state: highState as BandRead['state'],
-      human: highState === 'high' ? 'highs read bright, can get brittle'
-        : highState === 'low' ? 'a little dark up top' : 'top end is balanced'
-    },
-  ];
-
-  // lean toward the worst band (for Cue to physically point at it)
-  const lowMag = lowState === 'ok' ? 0 : Math.abs(lowGap - (lowState === 'high' ? g.lowGap[1] : g.lowGap[0]));
-  const highMag = highState === 'ok' ? 0 : Math.abs(highGap - (highState === 'high' ? g.highGap[1] : g.highGap[0]));
-  const lean = lowMag >= highMag ? (lowMag > 0 ? -1 : 0) : (highMag > 0 ? 1 : 0);
-
-  return { score, verdict, verdictWord, face, loudnessHuman, truePeakHuman, monoHuman, bands, lean };
+  // The UI reads only score/verdict/verdictWord/face here; the human-readable consequence
+  // strings are owned by issueText.ts (issueSummary/honestyReceipt), which is localized and
+  // threshold-shared — so there is exactly ONE source of producer-voice copy, no drift.
+  return { score, verdict, verdictWord, face };
 }
