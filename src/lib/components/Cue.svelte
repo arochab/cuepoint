@@ -12,8 +12,9 @@
     size = 0,                 // 0 = fill parent (full-bleed stage); >0 = fixed square px
     mood = 'idle' as Mood,
     interactive = false,
-    autoRotate = true
-  }: { size?: number; mood?: Mood; interactive?: boolean; autoRotate?: boolean } = $props();
+    autoRotate = true,
+    energy = 0                // REAL [0..1] audio envelope value (honest droplet reactivity)
+  }: { size?: number; mood?: Mood; interactive?: boolean; autoRotate?: boolean; energy?: number } = $props();
 
   // Map our verbs to Claude Design's verdict state machine.
   const MOOD_TO_VERDICT: Record<Mood, CueVerdict> = {
@@ -23,14 +24,30 @@
   let canvas: HTMLCanvasElement;
   // The Three.js engine (~1MB) is loaded ON DEMAND when Cue first mounts, so the initial
   // page stays light. Type is the module's return shape.
-  let api: { setVerdict: (v: CueVerdict) => void; dispose: () => void } | null = null;
+  let api: { setVerdict: (v: CueVerdict) => void; setEnergy?: (e: number) => void; dispose: () => void } | null = null;
   let failed = $state(false);
+
+  // "Silence" reduced-motion path: skip WebGL entirely and render the static fallback dot
+  // (tinted to the verdict colour). No rAF, no autoRotate — honours the user's OS setting.
+  const reduceMotion = typeof window !== 'undefined'
+    && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+  // Tint the fallback dot to the current mood so even the no-WebGL path carries meaning.
+  const MOOD_HEX: Record<Mood, string> = {
+    idle: '#36C9D6', listening: '#36C9D6', thinking: '#36C9D6', happy: '#C9F23C', worried: '#F73CB0'
+  };
+  const dotColor = $derived(MOOD_HEX[mood]);
 
   $effect(() => {
     if (api) api.setVerdict(MOOD_TO_VERDICT[mood]);
   });
+  // push the REAL audio envelope value into the scene (honest reactivity)
+  $effect(() => {
+    if (api?.setEnergy) api.setEnergy(energy);
+  });
 
   onMount(() => {
+    if (reduceMotion) { failed = true; return; }  // render the static dot, skip WebGL
     let disposed = false;
     (async () => {
       try {
@@ -53,10 +70,11 @@
   aria-label="Cue, mood {mood}"
   role="img"
 >
-  <canvas bind:this={canvas} style="display:block;width:100%;height:100%;touch-action:none;"></canvas>
-  {#if failed}
-    <!-- WebGL unavailable: a quiet on-brand fallback dot so the layout never breaks. -->
-    <div class="cue-fallback"></div>
+  {#if !failed}
+    <canvas bind:this={canvas} style="display:block;width:100%;height:100%;touch-action:none;"></canvas>
+  {:else}
+    <!-- WebGL off or reduced-motion: a quiet on-brand fallback dot, tinted to the mood. -->
+    <div class="cue-fallback" style="--dot:{dotColor};"></div>
   {/if}
 </div>
 
@@ -65,6 +83,6 @@
   .cue-fallback {
     position: absolute; inset: 0; margin: auto; width: 40%; height: 40%;
     border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
-    background: radial-gradient(circle at 38% 30%, #bfe9f3, #2FCDE6 55%, #0c5e72);
+    background: radial-gradient(circle at 38% 30%, color-mix(in srgb, var(--dot) 40%, white), var(--dot) 55%, color-mix(in srgb, var(--dot) 60%, black));
   }
 </style>

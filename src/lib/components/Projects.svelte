@@ -1,9 +1,14 @@
 <script lang="ts">
   import type { Route, Project } from '../types/index.js';
-  import { createProject, deleteProject } from '../utils/db.js';
+  import { createProject } from '../utils/db.js';
   import { toast } from '../utils/toast.svelte.js';
+  import { getHistory, type AnalysisRecord } from '../progress/history.js';
+  import { i18n, t } from '../i18n/index.svelte.js';
   import Auth from './Auth.svelte';
 
+  // "Silence" Projects = a typographic MEMORY TIMELINE, not a CRM of cards. It shows what
+  // Cue has already heard (local history, works signed-out), and offers a quiet inline
+  // sign-in to keep it. Project CRUD is demoted to a single quiet "+ nouveau" reveal.
   let { user, projects, onNavigate, onProjectsChanged }: {
     user: { id: string; email?: string } | null;
     projects: Project[];
@@ -11,19 +16,27 @@
     onProjectsChanged: () => void;
   } = $props();
 
+  // The track-memory timeline (local-first), newest first.
+  const history = $derived<AnalysisRecord[]>((i18n.locale, getHistory()).slice().reverse());
+
+  const VERDICT_WORD: Record<string, string> = {
+    ship: 'ENVOIE', almost: 'PRESQUE', work: 'PAS ENCORE'
+  };
+  function verdictFor(score: number | undefined): string {
+    if (score == null) return '';
+    return score >= 80 ? VERDICT_WORD.ship : score >= 55 ? VERDICT_WORD.almost : VERDICT_WORD.work;
+  }
+
   let showCreate = $state(false);
   let newName = $state('');
-  let newDesc = $state('');
   let creating = $state(false);
-  let confirmDelete = $state<string | null>(null);
 
   async function handleCreate() {
     if (!user || !newName.trim() || creating) return;
     creating = true;
     try {
-      await createProject(user.id, newName.trim(), newDesc.trim());
+      await createProject(user.id, newName.trim(), '');
       newName = '';
-      newDesc = '';
       showCreate = false;
       await onProjectsChanged();
     } catch (error) {
@@ -33,111 +46,80 @@
       creating = false;
     }
   }
-
-  async function handleDelete(id: string) {
-    try {
-      await deleteProject(id);
-      confirmDelete = null;
-      await onProjectsChanged();
-    } catch (error) {
-      console.error('Delete project failed:', error);
-      toast('Could not delete project. Try again.');
-    }
-  }
-
-  function fmtDate(value: string) {
-    return new Date(value).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
-  }
 </script>
 
-<section class="page-container fade-up" style="display:grid; gap:1rem;">
-  <div class="surface" style="border-radius:var(--radius-xl); padding:1.2rem 1.3rem; display:grid; gap:.75rem;">
-    <div class="eyebrow">Project workspace</div>
-    <h1 class="display-title" style="font-size: clamp(2rem, 2.6vw, 3.2rem); max-width:11ch;">Track memory that survives beyond the session.</h1>
-    <p class="hero-copy">Save recipe picks, keep notes per account, hold onto concrete next steps, and keep every track's context in one place.</p>
-    <div class="tag-row">
-      <span class="pill active">Project comments</span>
-      <span class="pill">Checklist memory</span>
-      <span class="pill">JSON export</span>
-    </div>
-  </div>
+<div class="column top">
+  <h1 class="title reveal">{t('projects.title')}</h1>
 
+  {#if history.length === 0 && projects.length === 0}
+    <button class="empty reveal" style="--i:1;" onclick={() => onNavigate('analyzer')}>{t('projects.empty')}</button>
+  {:else}
+    <ol class="timeline">
+      {#each history as rec, i (rec.at)}
+        <li class="track reveal" style="--i:{i + 1};">
+          <span class="track-name">{rec.fileName}</span>
+          <span class="track-line ash">
+            {verdictFor(rec.score)}{#if rec.topIssue && rec.topIssue !== 'healthy'} · {rec.topIssue}{/if}{#if rec.score != null} · {rec.score}/100{/if}
+          </span>
+        </li>
+      {/each}
+    </ol>
+
+    {#if user && projects.length > 0}
+      <div class="horizon" style="margin:40px 0 28px;"></div>
+      <ol class="timeline">
+        {#each projects as project (project.id)}
+          <li class="track">
+            <button class="content-link2" onclick={() => onNavigate('project-detail', project.id)}>
+              <span class="track-name">{project.name}</span>
+              {#if project.description}<span class="track-line ash">{project.description}</span>{/if}
+            </button>
+          </li>
+        {/each}
+      </ol>
+    {/if}
+  {/if}
+
+  <!-- keep-it: inline sign-in for the signed-out producer, never a wall -->
   {#if !user}
-    <div class="detail-grid">
-      <div class="surface" style="border-radius:var(--radius-xl); padding:1.1rem; display:grid; gap:.6rem; align-content:start;">
-        <div class="eyebrow">Account required</div>
-        <h2 class="section-title">Projects, notes, favorites, and checklist memory are tied to your account.</h2>
-        <p class="section-copy">Use the magic link once, then move between recipes, analyzer, and project space without losing context.</p>
-        <div class="tag-row">
-          <span class="pill">Per-account memory</span>
-          <span class="pill">Project comments</span>
-          <span class="pill">Recipe collections by track</span>
-        </div>
-      </div>
-      <Auth />
+    <div class="keep reveal" style="--i:2;">
+      <p class="ash">{t('projects.keepIt')}</p>
+      <div class="keep-auth"><Auth /></div>
     </div>
   {:else}
-    <div class="flex items-center justify-between gap-3 flex-wrap">
-      <div>
-        <div class="eyebrow">Workspace</div>
-        <p class="section-copy" style="font-size:.92rem;">Open a project to manage chain picks, checklist items, and conversation around a track.</p>
-      </div>
-      <button class="btn btn-primary" onclick={() => showCreate = !showCreate}>{showCreate ? 'Close' : '+ New project'}</button>
-    </div>
-
-    {#if showCreate}
-      <div class="surface-strong" style="border-radius:var(--radius-lg); padding:1rem; display:grid; gap:.75rem;">
-        <div class="eyebrow">Create project</div>
-        <input type="text" bind:value={newName} placeholder="Project name" />
-        <textarea bind:value={newDesc} rows={3} placeholder="What is this track trying to become? What should your collaborators listen for?"></textarea>
-        <div class="flex gap-2">
-          <button class="btn btn-primary" onclick={handleCreate} disabled={!newName.trim() || creating}>{creating ? 'Creating…' : 'Create project'}</button>
-          <button class="btn btn-secondary" onclick={() => showCreate = false}>Cancel</button>
-        </div>
-      </div>
-    {/if}
-
-    {#if projects.length === 0}
-      <div class="surface-strong" style="border-radius:var(--radius-xl); padding:1.2rem; display:grid; gap:.7rem; min-height: 280px; align-content:center; justify-items:start;">
-        <div class="eyebrow">Empty workspace</div>
-        <h2 class="section-title">No project yet.</h2>
-        <p class="section-copy" style="max-width:42rem;">Create one project per track. Use it as the place where recipes, notes, checklist, and feedback stay coherent instead of living in five tabs and three messages.</p>
-        <button class="btn btn-primary" onclick={() => showCreate = true}>Create the first project</button>
-      </div>
+    {#if !showCreate}
+      <button class="link ash newproj" onclick={() => showCreate = true}>{t('projects.newProject')}</button>
     {:else}
-      <div class="recipe-grid">
-        {#each projects as project (project.id)}
-          <article class="recipe-card" style="gap:.75rem;">
-            <div class="flex items-start justify-between gap-3">
-              <div style="display:grid; gap:.35rem; min-width:0;">
-                <div class="eyebrow">Project</div>
-                <button onclick={() => onNavigate('project-detail', project.id)} class="text-left"><h3 class="section-title" style="font-size:1.18rem;">{project.name}</h3></button>
-                {#if project.description}
-                  <p class="section-copy" style="font-size:.9rem;">{project.description}</p>
-                {/if}
-              </div>
-              <button class="btn btn-ghost btn-icon" aria-label="Delete project" onclick={() => confirmDelete = confirmDelete === project.id ? null : project.id}>×</button>
-            </div>
-            <div class="tag-row">
-              <span class="pill">Updated {fmtDate(project.updated_at)}</span>
-              <span class="pill">Comments ready</span>
-              <span class="pill">Exportable</span>
-            </div>
-            <div class="flex items-center justify-between gap-3 pt-2" style="border-top:1px solid var(--color-line);">
-              {#if confirmDelete === project.id}
-                <div class="small-note" style="color:var(--color-coral);">Delete this project?</div>
-                <div class="flex gap-2">
-                  <button class="btn btn-secondary" style="padding:.55rem .8rem;" onclick={() => confirmDelete = null}>Cancel</button>
-                  <button class="btn btn-magenta" style="padding:.55rem .8rem;" onclick={() => handleDelete(project.id)}>Delete</button>
-                </div>
-              {:else}
-                <span class="small-note">Open full chain picks, checklist, and discussion.</span>
-                <button class="btn btn-secondary" style="padding:.55rem .85rem;" onclick={() => onNavigate('project-detail', project.id)}>Open</button>
-              {/if}
-            </div>
-          </article>
-        {/each}
+      <div class="newproj-form">
+        <input type="text" bind:value={newName} placeholder="…" onkeydown={(e: KeyboardEvent) => e.key === 'Enter' && handleCreate()} />
+        <button class="link tide" onclick={handleCreate} disabled={!newName.trim() || creating}>{creating ? t('an.saving') : 'ok'}</button>
+        <button class="link ash" onclick={() => showCreate = false}>{t('cold.back')}</button>
       </div>
     {/if}
   {/if}
-</section>
+</div>
+
+<style>
+  .title { font-family: var(--font-serif); font-weight: 300; font-size: clamp(24px, 5vw, 38px); color: var(--color-text); margin: 0 0 var(--gap-verse); }
+  .empty { font-family: var(--font-serif); font-weight: 300; font-style: italic; font-size: 18px; color: var(--color-text-muted); text-align: left; }
+  .empty:hover { color: var(--color-text); }
+
+  .timeline { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; }
+  .track { display: flex; flex-direction: column; gap: 6px; padding: 24px 0; border-bottom: 1px solid var(--color-hairline); }
+  .track:last-child { border-bottom: none; }
+  .track-name { font-family: var(--font-sans); font-size: 16px; color: var(--color-text); }
+  .track-line { font-size: 13px; font-family: var(--font-mono); letter-spacing: 0.02em; }
+  .ash { color: var(--color-text-muted); }
+  .tide { color: var(--color-cyan); }
+  .content-link2 { display: flex; flex-direction: column; gap: 6px; text-align: left; background: none; border: none; cursor: pointer; padding: 0; }
+
+  .link { font-family: var(--font-sans); font-size: 14px; color: var(--color-text-secondary); background: none; border: none; cursor: pointer; }
+  .link:hover { color: var(--color-text); }
+  .link:disabled { opacity: .4; }
+
+  .keep { margin-top: var(--gap-breath); display: flex; flex-direction: column; gap: 18px; }
+  .keep-auth { max-width: 380px; }
+  .newproj { margin-top: 40px; align-self: flex-start; }
+  .newproj-form { margin-top: 40px; display: flex; gap: 16px; align-items: baseline; }
+  .newproj-form input { max-width: 260px; }
+</style>

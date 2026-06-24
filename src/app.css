@@ -1,94 +1,92 @@
 @import "tailwindcss";
 
 /* ============================================================================
-   CuePoint - brand system (Claude Design). Dark "night-pool" ground, the liquid
-   Cue droplet, Archivo + JetBrains Mono, Pool Cyan / Volt Lime / Magenta accents.
-   One source of truth - the token NAMES are kept stable so every component follows;
-   only the VALUES were remapped from the old cream POOL to this dark system.
+   CuePoint — "Silence" design system (UX-jury winner, 2026-06-23).
+   A dark, breathing single-column ROOM. Exactly one object on screen at a time.
+   ZERO cards anywhere — no border+radius+shadow+fill rectangle as a content motif.
+   Slate ground, Mist text, ONE accent (Tide). Fraunces for the spoken words,
+   Inter Tight for the body, JetBrains Mono demoted to plugin/param strings only.
+   The token NAMES are kept stable so legacy classes don't crash; the VALUES are
+   remapped and the card primitives are flattened to nothing.
    ============================================================================ */
 
 @theme {
-  /* Type. Archivo = display + UI; JetBrains Mono = data/labels.
-     --font-hero = the hero TITLE family ONLY, isolated so Claude Design's typo reco
-     can be swapped in one line without touching the rest of the system. */
-  /* Adam: JetBrains Mono EVERYWHERE (the nav font / "the machine's voice") - body,
-     titles, labels, buttons. The ONLY exception is the hero title, which keeps
-     Claude Design's Fredoka. One mono family across the whole product. */
-  --font-display: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
-  --font-hero: "Fredoka", system-ui, sans-serif;  /* hero "hear it. fix it." ONLY */
-  --font-sub: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
-  --font-sans: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  /* Type — Fraunces speaks (verdict word, invitations), Inter Tight is the body,
+     mono is ONLY for code-like plugin/param strings. */
+  --font-serif: "Fraunces", Georgia, "Times New Roman", serif;
+  --font-sans: "Inter Tight", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-display: var(--font-serif);  /* legacy .display-title / .cp-display -> Fraunces */
+  --font-hero: var(--font-serif);     /* Fredoka retired */
+  --font-sub: var(--font-sans);
 
-  /* Brand palette - EXACT Claude Design values.
-     Ink = night-pool ground. Cloud = text. Cyan/Lime/Magenta = verdict accents. */
-  --color-ink: #0A0C0F;          /* app ground (the night-pool) */
-  --color-bone: #0A0C0F;         /* "page bg" alias -> dark */
-  --color-bone-soft: #11151A;    /* lifted surface */
-  --color-paper: #0E1116;        /* card surface */
-  --color-surface-2: #14171C;    /* elevated surface */
-  --color-hairline: rgba(255,255,255,0.08);  /* EXACT Claude Design hairline */
-  --color-lime: #C9F23C;         /* Volt Lime - SEND IT / success */
+  /* Palette — Slate ground, Mist text, ONE accent (Tide). Lime/Magenta stay DEFINED
+     (cueScene + verdict-hex import them) but are used NOWHERE in the 2D UI. */
+  --color-ink: #16181D;          /* Slate — warm-charcoal ground */
+  --color-bone: #16181D;         /* alias -> Slate */
+  --color-bone-soft: #1B1E24;    /* Hush — the only second tone; faint wash, never a box */
+  --color-paper: #16181D;        /* collapse "card surface" to ground -> flat */
+  --color-surface-2: #1B1E24;    /* inputs only */
+  --color-hairline: rgba(255,255,255,0.06);  /* the horizon rule — softer */
+  --color-line: rgba(255,255,255,0.06);
+
+  --color-text: #E7E4DC;         /* Mist — warm off-white */
+  --color-text-secondary: #9A9DA3;
+  --color-text-muted: #6E727A;   /* Ash — the rare second line */
+
+  --color-cyan: #36C9D6;         /* Tide — the ONE accent (dot, progress hairline, focus) */
+  --color-lime: #C9F23C;         /* defined for cueScene + VERDICT_HEX; not used in 2D */
   --color-lime-deep: #AEDF1F;
-  --color-magenta: #F73CB0;      /* Magenta - NOT YET */
-  --color-cyan: #2FCDE6;         /* Pool Cyan - Cue's home colour / ONE THING */
+  --color-magenta: #F73CB0;      /* defined for cueScene + VERDICT_HEX; not used in 2D */
   --color-coral: #F73CB0;
   --color-ok: #C9F23C;
-  --color-cream-print: #F3EFE2;  /* Chlorine Cream - print/share surface only */
+  --color-cream-print: #F3EFE2;  /* print/share surface only */
 
-  --color-text: #ECEDEE;         /* Cloud */
-  --color-text-secondary: #AEB6BD;
-  --color-text-muted: #6F7880;
-  --color-line: rgba(255, 255, 255, 0.10);
+  /* Scale / rhythm — the room breathes. */
+  --step-hero: clamp(2.8rem, 9vw, 5.2rem);   /* the one verdict word */
+  --gap-breath: clamp(48px, 10vh, 120px);
+  --gap-verse: 48px;
 
-  /* Radius scale */
-  --radius-sm: 12px;
-  --radius-md: 16px;
-  --radius-lg: 18px;
-  --radius-xl: 24px;
-  --radius-pill: 999px;
+  /* Radius / elevation — the card vocabulary is gone. */
+  --radius-sm: 0; --radius-md: 0; --radius-lg: 0; --radius-xl: 0; --radius-pill: 999px;
+  --shadow-pop: none;
+  --shadow-pop-sm: none;
+  --glow-state: 0 0 40px;        /* cueScene + focus glow only */
+  --outline: 1px; --outline-thin: 1px;
 
-  /* Elevation on dark = thin hairline + soft depth shadow (no hard black offset). */
-  --outline: 1px;
-  --outline-thin: 1px;
-  --shadow-pop: 0 20px 50px rgba(0,0,0,0.45);   /* EXACT Claude Design elevation */
-  --shadow-pop-sm: 0 8px 24px rgba(0,0,0,0.4);
-  --glow-state: 0 0 40px;                        /* glow 0 0 40px [state] */
-  --step-hero: clamp(2.6rem, 8vw, 4.6rem);
-
-  /* Claude Design motion: UI is a clean 250ms cubic-out (NO bouncy overshoot -
-     the overshoot read as "toy"). --ease-pop kept for legacy callers but remapped
-     to the calm curve so nothing reintroduces the bounce. Verdict colour lerps ~1.2s. */
-  --ease-ui: cubic-bezier(0.22, 1, 0.36, 1);
-  --ease-pop: cubic-bezier(0.22, 1, 0.36, 1);
+  /* Motion — ONE curve. The app inhales/exhales; nothing slides, bounces, or pops. */
+  --ease-calm: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-ui: var(--ease-calm);
+  --ease-pop: var(--ease-calm);
 }
 
 /* ---- Base ---- */
 * { box-sizing: border-box; }
 html {
-  margin: 0;
-  min-height: 100%;
+  margin: 0; min-height: 100%;
   background: var(--color-ink);
   color: var(--color-text);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
-body { margin: 0; min-height: 100dvh; color: var(--color-text); background: var(--color-ink); }
+body { margin: 0; min-height: 100dvh; color: var(--color-text); background: var(--color-ink); line-height: 1.7; }
 
 button, input, textarea, select { font: inherit; }
-button { cursor: pointer; }
+button { cursor: pointer; background: none; border: none; color: inherit; }
 a { color: inherit; text-decoration: none; }
 
+/* Inputs are the ONE place a faint surface + hairline is allowed (they must read as
+   editable), but flat: no radius, no shadow. */
 input, textarea, select {
   width: 100%;
-  border: 1px solid var(--color-hairline);
-  background: var(--color-surface-2);
-  border-radius: var(--radius-sm);
+  border: none;
+  border-bottom: 1px solid var(--color-hairline);
+  background: transparent;
   color: var(--color-text);
-  padding: 0.7rem 0.9rem;
+  padding: 0.6rem 0.1rem;
   outline: none;
-  transition: border-color 0.15s ease;
+  transition: border-color 0.25s var(--ease-calm);
 }
 input::placeholder, textarea::placeholder { color: var(--color-text-muted); }
 input:focus, textarea:focus, select:focus { border-color: var(--color-cyan); }
@@ -97,208 +95,109 @@ textarea { resize: vertical; }
 ::selection { background: var(--color-cyan); color: var(--color-ink); }
 
 /* ---- Focus visible ---- */
-:focus-visible { outline: 2px solid var(--color-cyan); outline-offset: 2px; border-radius: 4px; }
-.btn:focus-visible, .nav-item:focus-visible, .brand:focus-visible {
-  outline: 2px solid var(--color-cyan); outline-offset: 3px;
+:focus-visible { outline: 2px solid var(--color-cyan); outline-offset: 3px; }
+
+/* ---- App grain + vignette over the Slate ground (no extra canvas) ---- */
+.page-shell::after {
+  content: ""; position: fixed; inset: 0; z-index: 1; pointer-events: none;
+  background:
+    radial-gradient(120% 100% at 50% 40%, transparent 55%, rgba(0,0,0,0.35) 100%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  mix-blend-mode: overlay;
 }
 
 /* ---- Layout ---- */
-.page-shell { min-height: 100dvh; display: flex; flex-direction: column; background: var(--color-ink); }
-.page-container { width: min(1080px, calc(100vw - 36px)); margin: 0 auto; }
+.page-shell { min-height: 100dvh; display: flex; flex-direction: column; background: var(--color-ink); position: relative; }
+.page-container { width: min(680px, calc(100vw - 40px)); margin: 0 auto; }
 
-/* ---- Surfaces ---- */
-.surface, .surface-strong, .card {
-  background: var(--color-paper);
-  border: 1px solid var(--color-hairline);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-pop-sm);
+/* ============================================================================
+   THE COLUMN — the single non-card layout primitive. Where the old app drew a
+   card, this draws NOTHING. The reset below makes it impossible for a stray
+   legacy class to reintroduce a border/radius/shadow rectangle inside a column.
+   ============================================================================ */
+.column {
+  position: relative; z-index: 2;
+  width: min(600px, calc(100vw - 40px));
+  margin: 0 auto;
+  display: flex; flex-direction: column;
+  min-height: calc(100dvh - 64px);
+  justify-content: center;
 }
-.card-quiet {
-  background: var(--color-bone-soft);
-  border: 1px solid var(--color-hairline);
-  border-radius: var(--radius-md);
+.column.top { justify-content: flex-start; padding-top: clamp(80px, 14vh, 150px); padding-bottom: 80px; }
+.column :where(.surface, .surface-strong, .card, .card-quiet,
+  .recipe-card, .recipe-step, .issue-card, .metric-card, .cp-card, .cp-route) {
+  background: transparent !important; border: none !important;
+  box-shadow: none !important; border-radius: 0 !important; padding: 0 !important;
 }
+/* The horizon — a single 1px rule used SPARINGLY to ground a block. Never a frame. */
+.horizon { height: 1px; width: 100%; background: var(--color-hairline); border: none; }
 
-/* ---- Type primitives ---- */
-/* Big display = Archivo 900, slightly skewed, the brand's signature headline. */
-.bubble {
-  font-family: var(--font-display);
-  font-weight: 900;
-  line-height: 0.9;
-  letter-spacing: -0.03em;
-}
-.bubble-hero {
-  font-family: var(--font-display);
-  font-weight: 900;
-  font-size: var(--step-hero);
-  line-height: 0.9;
-  letter-spacing: -0.03em;
-  color: var(--color-text);
-  transform: skewX(-7deg);
-}
-.issue-title { font-size: 0.95rem; font-weight: 600; line-height: 1.2; }
+/* Stagger reveal for typographic sequences (lists are manuscripts, not box stacks). */
+.reveal { opacity: 0; transform: translateY(8px); animation: calmRise 0.6s var(--ease-calm) forwards; }
+.reveal[style*="--i"] { animation-delay: calc(var(--i) * 60ms); }
+@keyframes calmRise { to { opacity: 1; transform: none; } }
+
+/* ---- Type primitives (flattened; serif speaks, mono only for code) ---- */
 .eyebrow {
   display: inline-flex; align-items: center; gap: 0.4rem;
   font-family: var(--font-mono);
   font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase;
   color: var(--color-text-muted);
 }
-.display-title {
-  font-family: var(--font-display);
-  font-size: clamp(2.2rem, 6vw, 4rem);
-  line-height: 0.9;
-  letter-spacing: -0.02em;
-  font-weight: 800;
-}
-.hero-copy { font-size: clamp(0.97rem, 1.1vw, 1.08rem); line-height: 1.55; color: var(--color-text-secondary); max-width: 46rem; }
-.section-title { font-family: var(--font-display); font-size: clamp(1.2rem, 1.5vw, 1.6rem); line-height: 1.0; letter-spacing: -0.01em; font-weight: 700; }
+.display-title { font-family: var(--font-serif); font-size: clamp(2rem, 6vw, 3.6rem); line-height: 1.0; letter-spacing: -0.01em; font-weight: 400; }
+.section-title { font-family: var(--font-serif); font-size: clamp(1.2rem, 1.5vw, 1.6rem); line-height: 1.15; letter-spacing: -0.01em; font-weight: 400; }
+.hero-copy { font-size: clamp(0.97rem, 1.1vw, 1.08rem); line-height: 1.6; color: var(--color-text-secondary); max-width: 42rem; }
+.section-copy { color: var(--color-text-secondary); line-height: 1.6; }
+.small-note { font-size: 0.78rem; color: var(--color-text-muted); }
 .muted { color: var(--color-text-muted); }
-.section-copy { color: var(--color-text-secondary); line-height: 1.55; }
 .mono { font-family: var(--font-mono); }
 
-/* ---- Buttons (dark) ---- */
+/* ---- Buttons — text-first, no fills, no pills-as-cards ---- */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
-  font-weight: 700; font-size: 0.92rem;
-  min-height: 44px;
-  border: 1px solid var(--color-hairline);
-  border-radius: var(--radius-pill);
-  padding: 0.7rem 1.05rem;
-  background: var(--color-surface-2);
-  color: var(--color-text);
-  transition: transform 0.08s ease, filter 0.15s ease, border-color 0.15s ease, background-color 0.12s ease;
+  font-family: var(--font-sans); font-weight: 500; font-size: 0.95rem;
+  min-height: 40px; border: none; background: transparent; color: var(--color-text);
+  padding: 0.5rem 0; transition: color 0.25s var(--ease-calm), opacity 0.25s var(--ease-calm);
 }
-.btn:hover { border-color: rgba(255,255,255,0.35); }
-.btn:active { transform: scale(0.98); }
-.btn:disabled { opacity: 0.5; cursor: not-allowed; }
-/* "never large flat fills" - even the primary CTA is a thin cyan outline at rest
-   that fills cyan on hover/focus. One rule, applied everywhere via this class. */
-.btn-primary {
-  background: transparent;
-  color: var(--color-cyan);
-  border-color: color-mix(in srgb, var(--color-cyan) 55%, transparent);
-  transition: color 0.25s var(--ease-ui), background-color 0.25s var(--ease-ui), border-color 0.25s var(--ease-ui), box-shadow 0.25s var(--ease-ui);
-}
-.btn-primary:hover, .btn-primary:focus-visible {
-  background: var(--color-cyan); color: var(--color-ink); border-color: transparent;
-  box-shadow: var(--glow-state) color-mix(in srgb, var(--color-cyan) 38%, transparent);
-}
-.btn-secondary { background: var(--color-surface-2); color: var(--color-text); }
-.btn-magenta { background: var(--color-magenta); color: var(--color-ink); border-color: transparent; }
-.btn-ghost { background: transparent; border-color: transparent; color: var(--color-text-secondary); }
-.btn-ghost:hover { background: rgba(255,255,255,0.06); color: var(--color-text); }
-.btn-icon { min-width: 44px; min-height: 44px; padding: 0; }
-/* Claude Design "fill on intent" button: thin cyan outline at rest, fills cyan on
-   hover/focus. This is the brand's CTA - never a large flat fill sitting idle. */
-.btn-outline-cyan {
-  background: transparent;
-  color: var(--color-cyan);
-  border-color: color-mix(in srgb, var(--color-cyan) 55%, transparent);
-  transition: color 0.25s var(--ease-ui), background-color 0.25s var(--ease-ui), border-color 0.25s var(--ease-ui), box-shadow 0.25s var(--ease-ui);
-}
-.btn-outline-cyan:hover,
-.btn-outline-cyan:focus-visible {
-  background: var(--color-cyan);
-  color: var(--color-ink);
-  border-color: transparent;
-  box-shadow: var(--glow-state) color-mix(in srgb, var(--color-cyan) 38%, transparent);
-}
+.btn:hover { color: var(--color-text); opacity: 0.85; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+/* The "primary" action is a quiet Tide-underlined link, never a filled rectangle. */
+.btn-primary { color: var(--color-cyan); border-bottom: 1px solid color-mix(in srgb, var(--color-cyan) 50%, transparent); padding-bottom: 3px; }
+.btn-primary:hover { border-color: var(--color-cyan); opacity: 1; }
+.btn-secondary { color: var(--color-text-secondary); }
+.btn-secondary:hover { color: var(--color-text); }
+.btn-ghost { color: var(--color-text-muted); }
+.btn-ghost:hover { color: var(--color-text); }
+.btn-outline-cyan { color: var(--color-cyan); border-bottom: 1px solid color-mix(in srgb, var(--color-cyan) 50%, transparent); padding-bottom: 3px; }
+.btn-outline-cyan:hover { border-color: var(--color-cyan); }
+.btn-icon { min-width: 40px; min-height: 40px; padding: 0; }
 
-/* ---- Pills ---- */
+/* ---- Tag-row kept for legacy callers, rendered as quiet inline text, not pills ---- */
+.tag-row { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: baseline; }
 .pill {
-  display: inline-flex; align-items: center; gap: 0.35rem;
-  font-family: var(--font-mono); font-size: 0.72rem;
-  padding: 0.34rem 0.66rem;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--color-hairline);
-  background: var(--color-surface-2);
-  color: var(--color-text-secondary);
+  font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.04em;
+  color: var(--color-text-muted); background: transparent; border: none; padding: 0;
 }
-.pill.active { background: var(--color-cyan); color: var(--color-ink); border-color: transparent; }
-.pill-warn { background: var(--color-magenta); color: var(--color-ink); border-color: transparent; }
+.pill.active { color: var(--color-cyan); }
+.pill-warn { color: var(--color-magenta); }
 
-/* ---- Top bar (dark) ---- */
-.topbar { position: sticky; top: 0; z-index: 30; background: rgba(10,12,15,0.82); backdrop-filter: blur(10px); border-bottom: 1px solid var(--color-hairline); }
-.topbar-inner { min-height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
-.brand { display: inline-flex; align-items: center; gap: 0.6rem; }
-.brand-mark { width: 34px; height: 34px; flex-shrink: 0; display: grid; place-items: center; }
-.brand-lines { display: grid; gap: 1px; text-align: left; }
-.brand-title { font-family: var(--font-display); font-size: 1.1rem; line-height: 1; font-weight: 800; letter-spacing: 0.02em; }
-.brand-subtitle { font-size: 0.62rem; color: var(--color-text-muted); font-family: var(--font-mono); letter-spacing: 0.1em; }
-/* Nav = Claude Design ".vbtn" pattern: mono uppercase labels, thin transparent
-   pill at rest, hover lifts the hairline + text to white. Active = cyan TEXT on a
-   whisper of cyan tint (never a full flat fill). No sub-labels - they were noise. */
-.nav-cluster { display: inline-flex; align-items: center; gap: 6px; }
-.nav-item {
-  font-family: var(--font-mono);
-  font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
-  padding: 9px 15px;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--color-hairline);
-  background: transparent;
-  color: var(--color-text-secondary);
-  transition: color 0.25s var(--ease-ui), background-color 0.25s var(--ease-ui), border-color 0.25s var(--ease-ui);
-}
-.nav-item:hover { border-color: rgba(255,255,255,0.45); color: #fff; }
-.nav-item.active {
-  color: var(--color-cyan);
-  background: color-mix(in srgb, var(--color-cyan) 10%, transparent);
-  border-color: color-mix(in srgb, var(--color-cyan) 45%, transparent);
+/* ---- Surfaces collapse to flat (no card anywhere); kept so legacy markup doesn't break ---- */
+.surface, .surface-strong, .card, .card-quiet,
+.recipe-step, .issue-card, .metric-card {
+  background: transparent; border: none; box-shadow: none; border-radius: 0;
 }
 
-/* ---- Grids ---- */
-.hero-actions { display: flex; flex-wrap: wrap; gap: 0.65rem; align-items: center; }
-.hero-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.95fr); gap: 1.2rem; }
-.metric-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
-.recipe-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 1rem; }
-.recipe-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; align-content: start; }
-.panel-stack { display: grid; gap: 1rem; }
-.detail-grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.85fr); gap: 1rem; }
-.analyzer-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.85fr); gap: 1rem; }
-
-/* ---- Component cards (dark) ---- */
-.recipe-card { border-radius: var(--radius-lg); border: 1px solid var(--color-hairline); background: var(--color-paper); box-shadow: var(--shadow-pop-sm); padding: 1rem; display: grid; gap: 0.85rem; }
-.recipe-step { border: 1px solid var(--color-hairline); border-radius: var(--radius-sm); background: var(--color-bone-soft); padding: 0.75rem 0.85rem; }
-.issue-card { border: 1px solid var(--color-hairline); border-radius: var(--radius-md); background: var(--color-paper); padding: 0.95rem 1rem; }
-.metric-card { border: 1px solid var(--color-hairline); border-radius: var(--radius-md); background: var(--color-paper); padding: 0.8rem 0.9rem; }
-
-.tag-row { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-.kpi-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.75rem; }
-.small-note { font-size: 0.78rem; color: var(--color-text-muted); }
-
-/* ---- Motion ---- */
-.fade-up { animation: fadeUp 0.4s var(--ease-pop) both; }
-@keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
-.pop-in { animation: popIn 0.45s var(--ease-pop) both; }
-@keyframes popIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
-
-/* ---- Spinner ---- */
-.spinner { width: 1.25rem; height: 1.25rem; border-radius: var(--radius-pill); border: 3px solid var(--color-ink); border-right-color: transparent; animation: spin 0.7s linear infinite; }
+/* ---- Spinner (kept for the boot state) ---- */
+.spinner { width: 1.1rem; height: 1.1rem; border-radius: 999px; border: 2px solid var(--color-hairline); border-right-color: var(--color-cyan); animation: spin 0.7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ---- Visually hidden, focusable ---- */
 .sr-only-focusable { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
-/* The wrapping label shows the focus ring when the clipped input is focused (keyboard reach). */
-label:focus-within { box-shadow: var(--shadow-pop-sm); }
 
-/* ---- Responsive ---- */
-@media (max-width: 1024px) {
-  .hero-grid, .detail-grid, .analyzer-grid, .recipe-layout { grid-template-columns: 1fr; }
-  .metric-grid, .recipe-grid { grid-template-columns: 1fr; }
-  /* KPIs are tiny: 2-up on mobile beats a 5-high tower of secondary evidence. */
-  .kpi-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .recipe-layout aside { position: static; top: auto; }
-}
-@media (max-width: 720px) {
-  .page-container { width: min(100vw - 22px, 1080px); }
-  .topbar-inner { flex-direction: column; align-items: flex-start; padding: 0.7rem 0; }
-  .nav-cluster { width: 100%; flex-wrap: wrap; }
-  .nav-item { min-width: 0; flex: 1; min-height: 44px; }
-  .brand-subtitle { display: none; }
-}
+/* ---- Legacy fade kept, remapped to the calm rise ---- */
+.fade-up { animation: calmRise 0.6s var(--ease-calm) both; }
 
 /* ---- Reduced motion ---- */
 @media (prefers-reduced-motion: reduce) {
-  .fade-up, .pop-in, .spinner { animation: none; }
-  .btn:hover { transform: none; }
+  .fade-up, .reveal, .spinner { animation: none; opacity: 1; transform: none; }
 }

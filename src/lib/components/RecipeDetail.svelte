@@ -1,6 +1,7 @@
 <script lang="ts">
   import { recipes } from '../data/recipes.js';
   import type { Project } from '../types/index.js';
+  import { t } from '../i18n/index.svelte.js';
 
   let { recipeId, isFav, note, projects, projectRecipeMap, user, onBack, onNavigate, onToggleFav, onSaveNote, onAddToProject }: {
     recipeId: string;
@@ -33,91 +34,79 @@
 </script>
 
 {#if !recipe}
-  <div class="page-container" style="padding-block:32px;">
-    <p class="section-copy">Recipe not found.</p>
-    <button class="btn btn-ghost" onclick={onBack}>← Back</button>
-  </div>
+  <div class="column"><p class="rd-goal">Recipe not found.</p><button class="rd-link" onclick={onBack}>{t('cold.back')}</button></div>
 {:else}
-  <section class="page-container fade-up" style="display:grid; gap:1rem;">
-    <button class="btn btn-ghost" style="justify-content:flex-start; padding-left:0;" onclick={onBack}>← Back to recipes</button>
+  <div class="column top">
+    <button class="rd-back rd-link" onclick={onBack}>{t('cold.back')}</button>
 
-    <div class="detail-grid">
-      <div class="surface" style="border-radius:var(--radius-xl); padding:1.2rem 1.25rem; display:grid; gap:.8rem;">
-        <div class="tag-row">
-          <span class="pill active">{recipe.category}</span>
-          {#each recipe.tags.slice(0, 4) as tag}
-            <span class="pill">{tag}</span>
-          {/each}
-        </div>
-        <div class="flex items-start justify-between gap-3">
-          <h1 class="display-title" style="font-size: clamp(1.9rem, 2.4vw, 3rem); max-width:12ch;">{recipe.title}</h1>
-          <button class="btn btn-ghost btn-icon" aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'} aria-pressed={isFav} style="font-size:1rem;" onclick={onToggleFav}>{isFav ? '★' : '☆'}</button>
-        </div>
-        <p class="hero-copy">{recipe.goal}</p>
-      </div>
+    <!-- a scannable worklist, no card — alignment + silence do all the work -->
+    <h1 class="rd-title reveal">{recipe.title}</h1>
+    <p class="rd-goal reveal" style="--i:1;">{recipe.goal}</p>
+    <p class="rd-step-count rd-mono rd-ash reveal" style="--i:2;">{t('fix.stepCount')} 1 {t('fix.stepOf')} {recipe.chain.length}</p>
 
-      <div class="surface-strong" style="border-radius:var(--radius-xl); padding:1.1rem; display:grid; gap:.8rem; align-content:start;">
-        <div class="eyebrow">Use this route when</div>
-        <p class="section-copy">You want a starting chain with clear plugin roles, then adjust by ear instead of building from scratch.</p>
-        <button class="btn btn-primary" onclick={() => showProjectPicker = !showProjectPicker}>{showProjectPicker ? 'Close project picker' : '+ Add to project'}</button>
-        {#if showProjectPicker}
-          <div class="panel-stack">
-            {#if projects.length > 0}
-              {#each projects as project}
-                {@const already = (projectRecipeMap[project.id] ?? []).includes(recipe.id)}
-                <button class="btn {already ? 'btn-secondary' : 'btn-ghost'}" style="justify-content:space-between;" onclick={() => { if (!already) { onAddToProject(project.id); showProjectPicker = false; } }} disabled={already}>
-                  <span>{project.name}</span>
-                  <span>{already ? 'Added' : 'Add'}</span>
-                </button>
-              {/each}
-            {:else}
-              <div class="card-quiet" style="padding:1rem; border-radius:var(--radius-md); display:grid; gap:.6rem;">
-                <span class="small-note">Create a project first, then save this route into that track’s memory.</span>
-                {#if onNavigate}
-                  <button class="btn btn-primary" style="justify-self:start;" onclick={() => onNavigate!('projects')}>Create a project</button>
-                {/if}
-              </div>
-            {/if}
+    <ol class="rd-worklist">
+      {#each recipe.chain as step, index}
+        <li class="rd-step reveal" style="--i:{index + 3};">
+          <span class="rd-idx rd-tide rd-mono">{String(index + 1).padStart(2, '0')}</span>
+          <span class="rd-body">
+            <span class="rd-plugin">{step.plugin}</span>
+            <span class="rd-role rd-ash">{step.role}</span>
+            <span class="rd-param rd-mono rd-ash">{step.params}</span>
+          </span>
+        </li>
+      {/each}
+    </ol>
+
+    <div class="rd-alts">
+      <details><summary class="rd-link">{t('fix.native')}</summary><p class="rd-mono rd-ash rd-small">{recipe.native_alt}</p></details>
+      <details><summary class="rd-link">{t('fix.notes')}</summary><p class="rd-ash rd-small">{recipe.ableton_notes}</p></details>
+    </div>
+
+    {#if user}
+      <div class="rd-note">
+        <textarea rows={3} bind:value={localNote} placeholder="…"></textarea>
+        <div class="rd-note-actions">
+          <button class="rd-link rd-tide" onclick={handleSaveNote}>{noteSaved ? t('an.saved') : 'note'}</button>
+          {#if projects.length > 0}
+            <button class="rd-link rd-ash" onclick={() => showProjectPicker = !showProjectPicker}>+ projet</button>
+          {/if}
+        </div>
+        {#if showProjectPicker && projects.length > 0}
+          <div class="rd-projects">
+            {#each projects as project}
+              {@const already = (projectRecipeMap[project.id] ?? []).includes(recipe.id)}
+              <button class="rd-link {already ? 'rd-tide' : 'rd-ash'}" disabled={already} onclick={() => { if (!already) { onAddToProject(project.id); showProjectPicker = false; } }}>{project.name}{already ? ' ✓' : ''}</button>
+            {/each}
           </div>
         {/if}
       </div>
-    </div>
-
-    <div class="detail-grid">
-      <section class="surface-strong" style="border-radius:var(--radius-xl); padding:1rem; display:grid; gap:.8rem;">
-        <div class="eyebrow">Chain</div>
-        <div class="panel-stack">
-          {#each recipe.chain as step, index}
-            <div class="recipe-step">
-              <div class="mono muted" style="font-size:10px; text-transform:uppercase; letter-spacing:.14em; margin-bottom:.35rem;">Step {index + 1}</div>
-              <div style="font-size:.98rem; font-weight:600;">{step.plugin}</div>
-              <div class="small-note" style="margin-top:.2rem;">{step.role}</div>
-              <p class="section-copy" style="font-size:.9rem; margin-top:.5rem;">{step.params}</p>
-            </div>
-          {/each}
-        </div>
-      </section>
-
-      <div class="panel-stack">
-        <section class="surface-strong" style="border-radius:var(--radius-xl); padding:1rem; display:grid; gap:.6rem;">
-          <div class="eyebrow">Ableton notes</div>
-          <p class="section-copy">{recipe.ableton_notes}</p>
-        </section>
-        <section class="surface-strong" style="border-radius:var(--radius-xl); padding:1rem; display:grid; gap:.6rem;">
-          <div class="eyebrow">Native fallback</div>
-          <p class="section-copy">{recipe.native_alt}</p>
-        </section>
-        {#if user}
-          <section class="surface-strong" style="border-radius:var(--radius-xl); padding:1rem; display:grid; gap:.6rem;">
-            <div class="eyebrow">Your note</div>
-            <textarea rows={5} bind:value={localNote} placeholder="Why this route helps this track, what to test next, what to avoid…"></textarea>
-            <div class="flex items-center gap-2">
-              <button class="btn btn-primary" onclick={handleSaveNote}>Save note</button>
-              {#if noteSaved}<span class="small-note" style="color:var(--color-ok)">Saved</span>{/if}
-            </div>
-          </section>
-        {/if}
-      </div>
-    </div>
-  </section>
+    {/if}
+  </div>
 {/if}
+
+<style>
+  .rd-back { align-self: flex-start; margin-bottom: 40px; }
+  .rd-title { font-family: var(--font-serif); font-weight: 300; font-size: clamp(24px, 4vw, 36px); line-height: 1.1; color: var(--color-text); margin: 0; }
+  .rd-goal { font-family: var(--font-serif); font-weight: 300; font-size: clamp(16px, 2.4vw, 20px); color: var(--color-text-secondary); margin: 16px 0 0; line-height: 1.4; }
+  .rd-step-count { margin: 28px 0 0; font-size: 12px; }
+  .rd-worklist { list-style: none; padding: 0; margin: 18px 0 0; display: flex; flex-direction: column; gap: var(--gap-verse); }
+  .rd-step { display: grid; grid-template-columns: 2ch 1fr; gap: 16px; align-items: baseline; }
+  .rd-idx { font-size: 13px; }
+  .rd-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .rd-plugin { font-family: var(--font-sans); font-size: 15px; font-weight: 500; color: var(--color-text); }
+  .rd-role { font-size: 13px; }
+  .rd-param { font-size: 12px; line-height: 1.5; word-break: break-word; }
+  .rd-alts { display: flex; gap: 24px; flex-wrap: wrap; margin-top: 40px; }
+  .rd-alts summary { list-style: none; }
+  .rd-note { margin-top: var(--gap-breath); }
+  .rd-note-actions { display: flex; gap: 20px; margin-top: 12px; }
+  .rd-projects { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; align-items: flex-start; }
+
+  .rd-ash { color: var(--color-text-muted); }
+  .rd-tide { color: var(--color-cyan); }
+  .rd-small { font-size: 12px; }
+  .rd-mono { font-family: var(--font-mono); }
+  .rd-link { font-family: var(--font-sans); font-size: 14px; color: var(--color-text-secondary); background: none; border: none; cursor: pointer; transition: color .25s var(--ease-calm); }
+  .rd-link:hover { color: var(--color-text); }
+  .rd-link:disabled { opacity: .5; cursor: default; }
+</style>

@@ -1,5 +1,12 @@
 export type RecipeCategory = 'sound-design' | 'mixing' | 'mastering';
 
+// A recipe's diagnostic need — the producer-voice problem it answers. This is what
+// makes Cue physically unable to bluff a route the DSP can't support: the cold-entry
+// question and the post-verdict fix both route off `need`, not brittle tag overlap.
+// The 4 diagnostic needs map 1:1 to what the DSP truly hears (headroom+loudness merge
+// into 'loudness' at the routing layer); 'character' is browse-only, never a verdict.
+export type RecipeNeed = 'low-end' | 'phase' | 'top-end' | 'loudness' | 'character';
+
 export interface RecipeStep {
   plugin: string;
   role: string;
@@ -10,8 +17,9 @@ export interface Recipe {
   id: string;
   title: string;
   category: RecipeCategory;
+  need: RecipeNeed;
   goal: string;
-  tags: string[];
+  tags: string[];        // internal-only now: search/filter UI is deleted, kept for matching depth
   chain: RecipeStep[];
   ableton_notes: string;
   native_alt: string;
@@ -77,7 +85,9 @@ export interface ProjectComment {
   created_at: string;
 }
 
-export type Route = 'home' | 'recipes' | 'recipe-detail' | 'analyzer' | 'projects' | 'project-detail' | 'admin';
+// 'recipes' (the standalone library) was deleted by the UX jury — recipe-detail survives,
+// reached from a verdict (Path A) or a cold need-question (Path B), never a library tab.
+export type Route = 'home' | 'recipe-detail' | 'analyzer' | 'projects' | 'project-detail' | 'admin';
 
 // Admin dashboard shapes (read via service-aware RPC / RLS-gated selects).
 export interface AdminUserRow {
