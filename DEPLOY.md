@@ -14,8 +14,8 @@ Keep the SPA rewrite as-is. This app routes purely in memory (`let route = $stat
 
 ## Step by step
 
-1. **Push your latest commit** to `github.com/arochab/kapman-toolkit-2` (branch `main`). Vercel deploys whatever is on the branch you import. Confirm `vercel.json`, `package.json` and `vite.config.ts` are committed, and that `.env` / `.env.local` are **not** committed (they're gitignored).
-2. Go to <https://vercel.com/new> and sign in with GitHub. Click **Import** next to the `arochab/kapman-toolkit-2` repository (use **Adjust GitHub App Permissions** if the repo isn't listed, then grant Vercel access).
+1. **Push your latest commit** to `github.com/arochab/cuepoint` (branch `main`). Vercel deploys whatever is on the branch you import. Confirm `vercel.json`, `package.json` and `vite.config.ts` are committed, and that `.env` / `.env.local` are **not** committed (they're gitignored).
+2. Go to <https://vercel.com/new> and sign in with GitHub. Click **Import** next to the `arochab/cuepoint` repository (use **Adjust GitHub App Permissions** if the repo isn't listed, then grant Vercel access).
 3. On **Configure Project**, confirm: Framework Preset = **Vite** (auto-detected), Build Command = `npm run build`, Output Directory = `dist`, Install Command = `npm install`, Root Directory = `./`. Set Node version to **20.x** under Project Settings if it doesn't default there.
 4. Expand **Environment Variables** and add two:
    - `VITE_SUPABASE_URL` = your `https://<ref>.supabase.co` value
