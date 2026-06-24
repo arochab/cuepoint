@@ -4,7 +4,7 @@ CuePoint handles authentication (Supabase) and payments (Stripe) for the optiona
 
 ## Reporting a vulnerability
 
-Please **do not** open a public issue for a security problem. Instead, email **admin@example.com** with:
+Please **do not** open a public issue for a security problem. Instead, email **adam.chabbi94@gmail.com** with:
 
 - a description of the issue and its impact,
 - steps to reproduce (or a proof-of-concept), and
