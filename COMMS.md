@@ -2,6 +2,36 @@
 
 > Remplace `LIEN` par l'URL Vercel une fois déployée. Mets-le en bio Instagram (IG n'autorise pas les liens cliquables en légende).
 
+## Visuels prêts (dans `assets/`)
+
+- `assets/ig-post.svg` — post carré 1080×1080 (écran verdict). **Pour Instagram : ouvre le SVG dans un navigateur → screenshot, ou convertis-le en PNG** (ex. [svgtopng.com](https://svgtopng.com) ou « Exporter » dans Figma/Inkscape).
+- `assets/ig-story.svg` — story 9:16 (1080×1920), le flux dépose → écoute → fix.
+- `assets/readme-triptych.svg` — le triptyque affiché dans le README (déjà branché).
+
+Ces visuels sont des **mockups SVG** fidèles au design — postables tels quels. Tu peux les remplacer plus tard par de vraies captures de l'app si tu veux.
+
+---
+
+## Hooks de légende alternatifs (FR)
+
+1. **« Ton mix te ment. Cue, lui, non. »**
+   Dépose ton track dans le navigateur — une vraie analyse DSP tourne en local (LUFS, true peak, phase, spectre) et Cue te dit LA seule chose à corriger, en français de prod. Pas d'upload, pas de bluff, gratuit. FR/EN. Lien en bio.
+
+2. **« Une analyse. Un fix. Zéro blabla. »**
+   Pas de note sur 100, pas de dashboard à 40 courbes. Cue écoute ton son et sort une priorité + la chaîne de plugins pour la régler. Tout reste sur ta machine. Deep house, techno, dub, garage, ambient — c'est fait pour toi. github.com/arochab/cuepoint
+
+---
+
+## Séquence de publication sur 3 jours
+
+**Jour 1 — amorce privée (DM)** : message 1-à-1 à 10-15 producteurs de confiance (le DM ci-dessous). Objectif : premiers retours bruts + premières étoiles GitHub avant le public.
+
+**Jour 2 — sortie publique** : poste le carré (`ig-post`) avec le hook 1. Enchaîne la story (`ig-story`) avec sticker « lien en bio » + un sondage (« ton dernier mix : trop de sub ? »). La story renvoie au post, le post au repo.
+
+**Jour 3 — communautés** : partage le triptyque dans r/edmproduction, r/WeAreTheMusicMakers, et 2-3 Discord de prod. Cadre « show, don't sell » : outil gratuit, 100% local, une analyse = un fix. Réponds à chaque commentaire dans l'heure.
+
+---
+
 ## Positionnement (one-liner, FR)
 
 Tu poses ton track dans le navigateur, une vraie analyse l'écoute (LUFS, true peak, phase, spectre — tout en local, rien n'est uploadé), et Cue te donne UN seul correctif prioritaire en français de producteur, puis te guide jusqu'au fix.

@@ -1,0 +1,69 @@
+<svg viewBox="0 0 1080 1080" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="CuePoint verdict screen — PRESQUE. Le bas mange les mids; donne au kick et a la basse chacun leur etage, pas plus de sub.">
+  <defs>
+    <radialGradient id="cueCore" cx="42%" cy="36%" r="68%">
+      <stop offset="0%" stop-color="#BFF4FA"/>
+      <stop offset="26%" stop-color="#6FE0EB"/>
+      <stop offset="58%" stop-color="#36C9D6"/>
+      <stop offset="100%" stop-color="#1A7E89"/>
+    </radialGradient>
+    <radialGradient id="cueGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#36C9D6" stop-opacity="0.55"/>
+      <stop offset="45%" stop-color="#36C9D6" stop-opacity="0.20"/>
+      <stop offset="100%" stop-color="#36C9D6" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="cueHi" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.92"/>
+      <stop offset="60%" stop-color="#FFFFFF" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="cueIri" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#C9F23C" stop-opacity="0.40"/>
+      <stop offset="50%" stop-color="#36C9D6" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#F73CB0" stop-opacity="0.38"/>
+    </linearGradient>
+    <filter id="soft" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="26"/>
+    </filter>
+    <filter id="rim" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.2"/>
+    </filter>
+    <filter id="contact" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="14"/>
+    </filter>
+  </defs>
+
+  <rect x="0" y="0" width="1080" height="1080" fill="#16181D"/>
+
+  <text x="64" y="74" font-family="Inter Tight, sans-serif" font-size="26" letter-spacing="2" fill="#E7E4DC" fill-opacity="0.42">cuepoint</text>
+  <text x="1016" y="74" text-anchor="end" font-family="Inter Tight, sans-serif" font-size="22" letter-spacing="0.6" fill="#6E727A" fill-opacity="0.5">Analyseur &#183; Projets &#183; FR&#183;EN</text>
+
+  <ellipse cx="540" cy="292" rx="230" ry="230" fill="url(#cueGlow)" filter="url(#soft)"/>
+  <ellipse cx="540" cy="468" rx="120" ry="20" fill="#36C9D6" fill-opacity="0.07" filter="url(#contact)"/>
+
+  <g transform="translate(540 280)">
+    <path d="M0 -150 C70 -70 118 -18 118 56 C118 122 64 168 0 168 C-64 168 -118 122 -118 56 C-118 -18 -70 -70 0 -150 Z" fill="url(#cueCore)"/>
+    <path d="M0 -150 C70 -70 118 -18 118 56 C118 122 64 168 0 168 C-64 168 -118 122 -118 56 C-118 -18 -70 -70 0 -150 Z" fill="url(#cueIri)"/>
+    <path d="M0 -150 C70 -70 118 -18 118 56 C118 122 64 168 0 168 C-64 168 -118 122 -118 56 C-118 -18 -70 -70 0 -150 Z" fill="none" stroke="#BFF4FA" stroke-opacity="0.55" stroke-width="1.5" filter="url(#rim)"/>
+    <ellipse cx="-34" cy="-32" rx="50" ry="66" fill="url(#cueHi)" transform="rotate(-22 -34 -32)"/>
+    <circle cx="-46" cy="-58" r="9" fill="#FFFFFF" fill-opacity="0.95"/>
+    <ellipse cx="40" cy="92" rx="40" ry="20" fill="#0E4A52" fill-opacity="0.35" transform="rotate(18 40 92)"/>
+    <ellipse cx="72" cy="70" rx="10" ry="22" fill="#BFF4FA" fill-opacity="0.4" transform="rotate(28 72 70)"/>
+    <circle cx="22" cy="-66" r="6" fill="#FFFFFF" fill-opacity="0.85"/>
+  </g>
+
+  <text x="540" y="706" text-anchor="middle" font-family="Fraunces, Georgia, serif" font-weight="300" font-size="184" letter-spacing="-2" fill="#E7E4DC">PRESQUE<tspan fill="#36C9D6">.</tspan></text>
+
+  <text x="540" y="798" text-anchor="middle" font-family="Inter Tight, sans-serif" font-size="40" fill="#E7E4DC" fill-opacity="0.86">
+    <tspan x="540" dy="0">Le bas mange les mids &#8212; donne au kick et &#224; la</tspan>
+    <tspan x="540" dy="58">basse chacun leur &#233;tage, pas plus de sub.</tspan>
+  </text>
+
+  <line x1="64" y1="880" x2="1016" y2="880" stroke="#6E727A" stroke-opacity="0.22" stroke-width="1"/>
+
+  <text x="64" y="938" font-family="Inter Tight, sans-serif" font-size="22" letter-spacing="0.6" fill="#6E727A" fill-opacity="0.7">entendu</text>
+  <text x="1016" y="930" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="30" letter-spacing="0.4" fill="#6E727A">bas +6 dB &#183; phase ok</text>
+  <text x="1016" y="966" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="30" letter-spacing="0.4" fill="#6E727A">pic -0.4 dBTP &#183; -9.2 LUFS</text>
+
+  <text x="64" y="1024" font-family="Inter Tight, sans-serif" font-size="30" fill="#36C9D6">guide-moi &#8594;</text>
+  <text x="1016" y="1024" text-anchor="end" font-family="Inter Tight, sans-serif" font-size="30" fill="#9A9DA3">les chiffres</text>
+</svg>

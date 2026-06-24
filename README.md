@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <img src="assets/shot-verdict.png" alt="CuePoint verdict — one fix + honesty receipt" width="100%">
+  <img src="assets/readme-triptych.svg" alt="CuePoint — drop your track, Cue listens, Cue gives one fix" width="100%">
 </p>
 
 Every producer knows the moment: the track is *almost* there, something is off, and you don't know what. So you open ten tabs, push faders at random, and lose the thread. CuePoint refuses to add to that noise. You drop a track, a real DSP runs entirely in your browser — BS.1770-4 integrated LUFS, a 4×-oversampled true peak, phase correlation, a full FFT spectrum and its tilt — and Cue tells you the **one** thing to fix first, in the voice of a producer who's been there, then hands you the exact plugin chain. The hard truth baked into the whole thing: **Cue never bluffs.** The engine genuinely hears five things, those map to five producer needs, and a recipe is only ever offered when the measurement actually supports it — the routing is structural, not a vibe. Under the verdict sits an "honesty receipt" that shows you the raw numbers Cue heard. And because all the DSP is client-side (`OfflineAudioContext`), your unreleased music never touches a server. Free. French by default — it's built for a French producer first — with an EN toggle.
@@ -51,11 +51,7 @@ Every producer knows the moment: the track is *almost* there, something is off, 
 </table>
 
 <p align="center">
-  <img src="assets/shot-home.png" alt="The door — drop your track" width="32%">
-  &nbsp;
-  <img src="assets/shot-listening.png" alt="Listening — the droplet pulses to real DSP progress" width="32%">
-  &nbsp;
-  <img src="assets/shot-verdict.png" alt="Verdict — one fix and the honesty receipt" width="32%">
+  <img src="assets/ig-post.svg" alt="CuePoint verdict — PRESQUE, one fix, and the honesty receipt" width="60%">
 </p>
 
 ## How it works
