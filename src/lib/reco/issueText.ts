@@ -46,8 +46,8 @@ const SUMMARY: Record<IssueType, Bi> = {
 
 // State-aware overrides keyed on the real measurement.
 const HEADROOM_CLIP: Bi = {
-  fr: 'Ton true peak dépasse le plafond — au moindre encodage, ça va clipper. Baisse le ceiling à -1 dBTP.',
-  en: 'Your true peak is over the ceiling — it will clip once encoded. Drop the ceiling to -1 dBTP.',
+  fr: 'Ton true peak passe au-dessus de 0 — à l’encodage lossy, ça peut clipper. Ramène le ceiling à -1 dBTP.',
+  en: 'Your true peak is over 0 — it can clip on lossy encoding. Set the ceiling to -1 dBTP.',
 };
 const PHASE_CANCEL: Bi = {
   fr: 'En mono, des éléments s’annulent — vérifie la polarité et les reverbs avant tout le reste.',
@@ -66,10 +66,11 @@ export function issueSummary(issue: IssueType, a?: AudioAnalysis, verdict?: stri
   const loc = i18n.locale;
   if (a) {
     if (issue === 'headroom') {
-      // Hard-clip wording only when the peak is bad enough to NOT ship (>2 dBTP is the
-      // hard-fault line in score.ts) — anything the verdict still ships is a gentle note.
-      const condemns = verdict === 'work' || a.truePeakEstimate > 2;
-      return (condemns ? HEADROOM_CLIP : SUMMARY.headroom)[loc];
+      // ALIGNED with the headroom card (diagnostics.ts: card is high-severity at TP > 0).
+      // The sentence and the card must agree: over 0 dBTP genuinely can clip on lossy
+      // encode, so say so — even on a SHIP master (a +0.1 peak is a real, if small, fault).
+      // -1..0 is hot-but-safe -> the gentle last-call note.
+      return (a.truePeakEstimate > 0 ? HEADROOM_CLIP : SUMMARY.headroom)[loc];
     }
     if (issue === 'phase') {
       if (a.phaseCorrelation < 0) return PHASE_CANCEL[loc];

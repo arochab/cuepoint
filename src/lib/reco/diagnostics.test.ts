@@ -62,26 +62,36 @@ describe('computeDiagnostics — real defects still surface', () => {
   });
 });
 
-describe('the no-bluff invariant — copy never contradicts the verdict/receipt', () => {
-  it('a SHIP master never co-renders hard-clip copy', () => {
-    const m = scoreMix(BAGATELLE, 'other');
-    expect(m.verdict).toBe('ship');
-    const sentence = issueSummary('headroom', BAGATELLE);  // topFix on Bagatelle is headroom
-    expect(sentence.toLowerCase()).not.toMatch(/clip|clipper/); // +0.1 is hot-but-safe, not "it will clip"
+// The core invariant: the headroom SENTENCE and the headroom CARD must agree on whether
+// it clips. The card is high-severity at TP > 0; so the sentence must say "clip" iff TP > 0.
+function headroomCard(a: AudioAnalysis) {
+  return computeDiagnostics(a, 'techno').issues.find((i) => i.type === 'headroom');
+}
+const saysClip = (s: string) => /clip|clipper/.test(s.toLowerCase());
+
+describe('the no-bluff invariant — headroom sentence and card never disagree', () => {
+  it.each([0.1, 0.3, 0.5, 1.0, 1.5, 2.0])('TP +%s dBTP: card is high-severity AND sentence warns of clipping (aligned)', (tp) => {
+    const a = mk({ truePeakEstimate: tp });
+    const card = headroomCard(a);
+    expect(card?.severity).toBe('high');               // card screams "over the ceiling"
+    expect(saysClip(issueSummary('headroom', a, scoreMix(a, 'techno').verdict))).toBe(true); // sentence agrees
   });
-  it('a genuinely clipping master (NOT YET verdict) DOES say it will clip', () => {
-    const clipper = mk({ truePeakEstimate: 3 });          // > 2 dBTP -> hard fault -> verdict work
-    expect(scoreMix(clipper, 'techno').verdict).toBe('work');
-    const sentence = issueSummary('headroom', clipper, 'work');
-    expect(sentence.toLowerCase()).toMatch(/clip|clipper/);
+  it.each([-0.3, -0.5, -0.9])('TP %s dBTP: hot-but-safe — card is low-severity AND sentence does NOT say clip (aligned)', (tp) => {
+    const a = mk({ truePeakEstimate: tp });
+    const card = headroomCard(a);
+    expect(card?.severity).toBe('low');
+    expect(saysClip(issueSummary('headroom', a, scoreMix(a, 'techno').verdict))).toBe(false);
+  });
+  it('the real reference master (+0.11 dBTP) is consistent: card high, sentence warns clip, verdict still SHIP', () => {
+    expect(headroomCard(BAGATELLE)?.severity).toBe('high');
+    expect(saysClip(issueSummary('headroom', BAGATELLE, scoreMix(BAGATELLE, 'other').verdict))).toBe(true);
+    expect(scoreMix(BAGATELLE, 'other').verdict).toBe('ship'); // a small +0.1 peak doesn't condemn the whole master
   });
   it('a wide-but-positive master never says "parts cancel"', () => {
     const wide = mk({ phaseCorrelation: 0.15, phaseCorrelationMin: 0.1 });
-    const sentence = issueSummary('phase', wide).toLowerCase();
-    expect(sentence).not.toMatch(/cancel|s’annulent|s'annulent/);
+    expect(issueSummary('phase', wide).toLowerCase()).not.toMatch(/cancel|s’annulent|s'annulent/);
   });
   it('a real cancellation DOES say parts cancel', () => {
-    const sentence = issueSummary('phase', mk({ phaseCorrelation: -0.5, phaseCorrelationMin: -0.8 })).toLowerCase();
-    expect(sentence).toMatch(/cancel|s’annulent|s'annulent/);
+    expect(issueSummary('phase', mk({ phaseCorrelation: -0.5, phaseCorrelationMin: -0.8 })).toLowerCase()).toMatch(/cancel|s’annulent|s'annulent/);
   });
 });

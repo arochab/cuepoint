@@ -7,7 +7,10 @@
 
 <p align="center">
   A real DSP listens to your bounce <b>entirely in the browser</b> — LUFS, true peak, phase, spectrum — and Cue<br>
-  names the single priority move in plain producer French. No upload. No bluffing. Free.
+  names the single priority move in plain producer French. Your audio never leaves your machine. No bluffing.
+</p>
+<p align="center">
+  <sub>The analyzer, the verdict and the rule-based coaching are <b>free and 100% local</b>. An optional AI coach (deeper, LLM-written) is a paid cloud add-on — see <a href="#monetization--architecture">Monetization</a>.</sub>
 </p>
 
 <p align="center">
@@ -83,12 +86,21 @@ Tuned for the music it serves — deep house, minimal, techno, dub techno, elect
 
 ## Built with Claude Code, used adversarially
 
-This was built with Claude Code using multi-agent workflows pointed at my *own* work — not to generate code unchecked, but to stress-test it. Two stories, both verifiable in git history:
+This was built with Claude Code using multi-agent workflows pointed at my *own* work — not to generate code unchecked, but to stress-test it. Two stories:
 
-- **An agent hallucinated a scene architecture that did not exist in the codebase.** It was caught by diffing the claim against the real file tree, and its output was discarded. The takeaway that shaped everything after: agent output is verified against real code, never trusted blindly.
+- **An agent hallucinated a scene architecture that did not exist in the codebase** (a `worldScene.ts` / `sceneState` that were never there). It was caught by diffing the claim against the real file tree, and its output was discarded — which is exactly why it leaves no commit. The takeaway that shaped everything after: agent output is verified against real code, never trusted blindly. The whole final-jury loop below exists because of this.
 - **Honesty became an engineering invariant.** A `Math.random()` "live meter" and a faked 95%-then-snap progress bar were found and deleted — the bar now reaches 100% only when the DSP result is ready. The no-bluff `recipe.need` routing and the genre-aware verdict exist *because* a review pass proved the old code could promise a fix the measurement couldn't back. The DSP audit even cleared a suspected LUFS bug by reproducing the math, rather than "fixing" correct code.
 
 Part of the same body of work: [claude-eats-tokens](https://github.com/arochab/claude-eats-tokens) · [kapman-news](https://github.com/arochab/kapman-news) · [prism](https://github.com/arochab/prism) · [brandpulse-app](https://github.com/arochab/brandpulse-app).
+
+## Monetization & architecture
+
+CuePoint is **free where it counts and paid only where it costs me money.** Two coaching tiers, one honest line between them:
+
+- **Free, 100% local** — the DSP, the verdict, the honesty receipt, the plugin-chain recipes, and a **rule-based coach** ([`rulesProvider.ts`](src/lib/coach/rulesProvider.ts)) that turns the measured numbers into guidance with zero network calls. Your audio is decoded in an `OfflineAudioContext` and **never leaves your machine** — there is no upload, ever.
+- **Optional paid AI coach** — a deeper, LLM-written coach behind a tiny **Stripe** credit system (EUR packs, 1 credit ≈ 1 track). It's a thin server because it has to be: a Supabase Edge Function ([`coach`](supabase/functions/coach/index.ts)) proxies the model, meters token cost, enforces a **daily spend ceiling**, and returns `402 payment-required` when you're out of credits ([`serverProvider.ts`](src/lib/coach/serverProvider.ts) surfaces the paywall). Checkout and entitlement live in [`create-checkout`](supabase/functions/create-checkout/index.ts) + [`stripe-webhook`](supabase/functions/stripe-webhook/index.ts), and an [`Admin`](src/lib/components/Admin.svelte) dashboard tracks spend-vs-cap with a coaching kill-switch.
+
+So: **the analyzer is free and serverless; only the AI coach is a paid cloud add-on.** Nothing about your audio is sent anywhere in either tier — the paid path sends the *derived numbers*, never the file.
 
 ## Design — "Silence"
 
@@ -100,7 +112,7 @@ Not a theme on top of an app; the app *is* the design.
 
 ## Tech stack
 
-**Svelte 5** runes (module state in `.svelte.ts`, exported `$state` mutated in place) · **Vite 6** · **Tailwind v4** (`@theme`, no config file) · **TypeScript 5** strict — `svelte-check`: 0 errors · **Vitest** golden-value DSP tests · **Three.js** custom shader via `onBeforeCompile`, lazy-loaded chunk so first paint stays light · **Supabase** Google + email-link auth, RLS-gated track *memory* (derived numbers only, never audio) · **Vercel** static SPA · **i18n** FR default + EN (built for a French producer first — the bilingual layer is real, not a stub).
+**Svelte 5** runes (module state in `.svelte.ts`, exported `$state` mutated in place) · **Vite 6** · **Tailwind v4** (`@theme`, no config file) · **TypeScript 5** strict — `svelte-check`: 0 errors · **Vitest** golden-value DSP tests · **Three.js** custom shader via `onBeforeCompile`, lazy-loaded chunk so first paint stays light · **Supabase** Google + email-link auth, RLS-gated track *memory* (derived numbers only, never audio) + **Edge Functions** (Deno) for the paid coach · **Stripe** Checkout + webhook for the credit system · **Vercel** static SPA · **i18n** FR default + EN (built for a French producer first — the bilingual layer is real, not a stub).
 
 ## Run it locally
 
@@ -129,12 +141,19 @@ The DSP, the droplet and the verdict all work with **no `.env` at all** — Supa
 src/lib/utils/audio.ts        the DSP — FFT, BS.1770-4 LUFS, 4× true peak, spectrum, RMS envelope
 src/lib/utils/audio.test.ts   golden-value DSP tests (true peak, LUFS, phase, tilt)
 src/lib/reco/score.ts         metrics → verdict + genre-aware band reads
+src/lib/reco/diagnostics.ts   metrics → the fix cards (pure, unit-tested no-bluff layer)
 src/lib/reco/needRoutes.ts    deterministic need → recipe routing (the anti-bluff layer)
 src/lib/reco/issueText.ts     producer-voice FR/EN verdict copy + honesty receipt
 src/lib/data/recipes.ts       20 plugin-chain recipes (+ Ableton-native alternatives)
+src/lib/coach/rulesProvider.ts   FREE local coach — measured numbers → guidance, no network
+src/lib/coach/serverProvider.ts  PAID coach client — calls the Edge Function, surfaces the 402 paywall
 src/lib/cue/cueScene.ts       the Three.js liquid-glass droplet (real shader + RMS reactivity)
 src/lib/i18n/index.svelte.ts  FR-default bilingual dictionary (runes module state)
+src/lib/components/Admin.svelte  credits dashboard — spend-vs-cap + coaching kill-switch
 src/App.svelte                in-memory router (Home · Analyzer · Projects · Auth · Admin)
+supabase/functions/coach/        Deno Edge Function — LLM proxy, token metering, daily ceiling, 402
+supabase/functions/create-checkout/  Stripe Checkout for EUR credit packs
+supabase/functions/stripe-webhook/   Stripe webhook → grants entitlements
 .github/workflows/ci.yml      check + test + build on every push
 vercel.json                   SPA rewrite + immutable asset caching
 ```
