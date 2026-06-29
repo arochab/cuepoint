@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { analyzeAudio, ANALYSIS_STAGES, type AnalysisStage } from '../utils/audio.js';
+  import { analyzeAudio, ANALYSIS_STAGES, AudioDecodeError, type AnalysisStage } from '../utils/audio.js';
   import { computeDiagnostics } from '../reco/diagnostics.js';
   import { recipeGoal } from '../data/recipes.js';
   import type { AudioAnalysis } from '../utils/audio.js';
@@ -284,7 +284,11 @@
       }
     } catch (err) {
       console.error(err);
-      if (myRun === fileGeneration) error = t('an.error');
+      if (myRun === fileGeneration) {
+        // A decode failure (too large / unsupported WAV / timeout) carries a precise human
+        // message — show it instead of the generic error so the user knows what to do.
+        error = (err instanceof AudioDecodeError) ? err.message : t('an.error');
+      }
     } finally {
       if (myRun === fileGeneration) { loading = false; currentStage = null; }
     }

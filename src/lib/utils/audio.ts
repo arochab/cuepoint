@@ -118,13 +118,42 @@ export const ANALYSIS_STAGES: AnalysisStage[] = ['decode', 'loudness', 'truepeak
 // Yield to the event loop so a stage tick can paint before the next blocking loop runs.
 const yieldToPaint = () => new Promise<void>((r) => setTimeout(r, 0));
 
+// Decode failures used to hang the UI forever (the goutte spun on "décodage" with no end):
+// decodeAudioData on a very large or unusual WAV (e.g. 32-bit float, or a 200 MB mixbus)
+// can reject silently or never resolve. We guard with a size limit + a hard timeout and
+// throw a TYPED, human error the UI can show instead of freezing. Tune the cap as needed.
+export const MAX_AUDIO_BYTES = 80 * 1024 * 1024;   // 80 MB — a normal export; mixbus WAVs exceed it
+export class AudioDecodeError extends Error {
+  constructor(public code: 'too-large' | 'decode-failed' | 'timeout', message: string) {
+    super(message); this.name = 'AudioDecodeError';
+  }
+}
+
 export async function analyzeAudio(file: File, onStage?: (stage: AnalysisStage) => void): Promise<AudioAnalysis> {
   // STAGE 1 — decode (also covers sample peak + RMS, the cheap first pass).
   onStage?.('decode');
   await yieldToPaint();
+
+  if (file.size > MAX_AUDIO_BYTES) {
+    throw new AudioDecodeError('too-large',
+      `Fichier trop lourd (${Math.round(file.size / 1048576)} Mo). Exporte un fichier sous ${Math.round(MAX_AUDIO_BYTES / 1048576)} Mo (un WAV 16/24-bit plus court, ou un MP3 320).`);
+  }
+
   const ctx = new OfflineAudioContext(2, 1, 44100);
   const arrayBuf = await file.arrayBuffer();
-  const decoded = await ctx.decodeAudioData(arrayBuf);
+  // Race the decode against a timeout so an unsupported/huge file can never hang the UI.
+  let decoded: AudioBuffer;
+  try {
+    decoded = await Promise.race([
+      ctx.decodeAudioData(arrayBuf),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new AudioDecodeError('timeout', 'Le décodage a pris trop de temps. Essaie un export plus léger (WAV plus court ou MP3 320).')), 30000)),
+    ]);
+  } catch (e) {
+    if (e instanceof AudioDecodeError) throw e;
+    throw new AudioDecodeError('decode-failed',
+      'Ce fichier n’a pas pu être décodé. Le navigateur ne lit pas certains WAV (par ex. 32-bit float) : réexporte en WAV 16 ou 24-bit, ou en MP3 320.');
+  }
 
   const ch0 = decoded.getChannelData(0);
   const ch1 = decoded.numberOfChannels > 1 ? decoded.getChannelData(1) : ch0;
