@@ -32,6 +32,8 @@
     </button>
     {#if user}
       <button class="navlink" onclick={onSignOut} title={user.email}>{t('nav.signout')}</button>
+    {:else}
+      <button class="navlink tide" onclick={() => onNavigate('projects')}>{t('nav.getAccess')}</button>
     {/if}
   </nav>
 </header>

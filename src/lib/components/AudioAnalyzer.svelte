@@ -184,6 +184,9 @@
 
   async function buyPack(pack: 'single' | 'five' | 'twelve') {
     if (buying) return;
+    // No account = no checkout (we must know who to credit). Instead of a dead click,
+    // send the producer to the sign-in screen (it lives on the Projects page).
+    if (!user) { onNavigate?.('projects'); return; }
     buying = true;
     try {
       const url = await startCheckout(pack);
@@ -518,7 +521,7 @@
             <p class="coach-title">{t('coach.title')}</p>
             <p class="ash small coach-subtitle">{t('coach.subtitle')}</p>
             {#if !user}
-              <p class="ash small" style="margin:14px 0;">{t('coach.signin')}</p>
+              <button class="link tide" style="margin:14px 0;" onclick={() => onNavigate?.('projects')}>{t('coach.signin')} →</button>
             {/if}
             <div class="pack-list">
               <button class="pack" disabled={buying} onclick={() => buyPack('single')}>{t('coach.pack1')}</button>
