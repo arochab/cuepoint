@@ -35,9 +35,16 @@ export const serverProvider: CoachProvider = {
       body: { ...input, analysisId: currentAnalysisId }
     });
     if (error) {
-      // supabase-js surfaces non-2xx as an error; map the paywall case.
-      const msg = String(error.message ?? '');
-      if (msg.includes('402') || msg.toLowerCase().includes('payment')) throw new Error('payment-required');
+      // supabase-js wraps any non-2xx in a FunctionsHttpError whose .message is a generic
+      // "non-2xx status code" string — it does NOT contain the status. The real status +
+      // body live on error.context (the Response). Read the body to detect the 402 paywall.
+      let status = 0; let bodyErr = '';
+      const ctx = (error as { context?: Response }).context;
+      if (ctx && typeof ctx.status === 'number') {
+        status = ctx.status;
+        try { const j = await ctx.clone().json(); bodyErr = String(j?.error ?? ''); } catch { /* ignore */ }
+      }
+      if (status === 402 || bodyErr === 'payment-required') throw new Error('payment-required');
       throw new Error('coach-unavailable');
     }
     return (data?.coaching as string)?.trim() || '';
