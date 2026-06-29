@@ -35,6 +35,9 @@ Thumbs.db
 # cycle runner state + reports (local only - not shared)
 reports/
 
+# rendered social videos (heavy binaries, kept local — the generator HTML IS committed)
+assets/story/*.mp4
+
 # Internal scaffolding — kept local, never published
 PROJECT-STATUS.md
 COMMS.md
